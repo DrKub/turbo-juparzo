@@ -63,6 +63,18 @@ class DecodeTest(unittest.TestCase):
         self.assertEqual(list(lookup.writable_indexes), [7])
         self.assertEqual(list(lookup.readonly_indexes), [])
 
+    def test_wrong_fee_payer_and_readonly_signer_reject(self):
+        wrong = Intent(bytes([9]) * 32, bytes([4]) * 32, bytes([5]) * 32, 1, None, {})
+        report = evaluate(LEGACY_B64, wrong)
+        self.assertEqual(report.reason, "fee_payer")
+        self.assertEqual(report.fee_payer, FEE_PAYER)
+        mutable = bytearray(base64.b64decode(LEGACY_B64))
+        # Message header starts after the one 64-byte zero signature.
+        mutable[1 + 64 + 1] = 1
+        readonly = base64.b64encode(bytes(mutable)).decode("ascii")
+        flagged = evaluate(readonly, intent())
+        self.assertEqual(flagged.reason, "readonly")
+
 
 if __name__ == "__main__":
     unittest.main()
