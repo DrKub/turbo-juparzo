@@ -75,6 +75,32 @@ class DecodeTest(unittest.TestCase):
         flagged = evaluate(readonly, intent())
         self.assertEqual(flagged.reason, "readonly")
 
+    def test_v0_without_captured_table_is_alt_missing(self):
+        report = evaluate(V0_B64, intent())
+        self.assertEqual(report.version, "v0")
+        self.assertEqual(report.reason, "alt_missing")
+        self.assertEqual(report.instruction_semantics, "unverified")
+        self.assertEqual(report.kind, "rejected")
+
+    def test_lookup_index_past_captured_table_is_alt_index(self):
+        short = Intent(FEE_PAYER, bytes([4]) * 32, bytes([5]) * 32, 1, None, {TABLE_ID: bytes(32)})
+        report = evaluate(V0_B64, short)
+        self.assertEqual(report.reason, "alt_index")
+        self.assertEqual(report.kind, "rejected")
+
+    def test_non_aligned_table_bytes_are_alt_missing(self):
+        odd = Intent(FEE_PAYER, bytes([4]) * 32, bytes([5]) * 32, 1, None, {TABLE_ID: bytes(31)})
+        self.assertEqual(evaluate(V0_B64, odd).reason, "alt_missing")
+
+    def test_resolved_lookup_is_still_unknown_program(self):
+        covered = Intent(FEE_PAYER, bytes([4]) * 32, bytes([5]) * 32, 1, None, {TABLE_ID: bytes(32 * 8)})
+        report = evaluate(V0_B64, covered)
+        self.assertTrue(report.parsed)
+        self.assertEqual(report.version, "v0")
+        self.assertEqual(report.reason, "unknown_program")
+        self.assertEqual(report.kind, "rejected")
+        self.assertEqual(report.instruction_semantics, "unverified")
+
 
 if __name__ == "__main__":
     unittest.main()

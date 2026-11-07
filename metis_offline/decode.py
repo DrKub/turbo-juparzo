@@ -35,4 +35,14 @@ def evaluate(wire_b64: str, intent: Intent) -> DecodeReport:
         return _reject("readonly", True, version, fee_payer, True)
     if fee_payer != intent.user:
         return _reject("fee_payer", True, version, fee_payer, True)
+    if isinstance(tx.message, MessageV0):
+        for lookup in tx.message.address_table_lookups:
+            table_key = bytes(lookup.account_key)
+            captured = intent.captured_tables.get(table_key)
+            if captured is None or len(captured) % 32 != 0:
+                return _reject("alt_missing", True, version, fee_payer, True)
+            limit = len(captured) // 32
+            indexes = list(lookup.writable_indexes) + list(lookup.readonly_indexes)
+            if any(index >= limit for index in indexes):
+                return _reject("alt_index", True, version, fee_payer, True)
     return _reject("unknown_program", True, version, fee_payer, True)
