@@ -1,5 +1,12 @@
 import base64
+import json
+import subprocess
+import sys
+import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
+from pathlib import Path
 
 from solders.hash import Hash
 from solders.message import Message, MessageV0
@@ -175,6 +182,83 @@ class DecodeTest(unittest.TestCase):
         self.assertNotIn("/execute", text)
         self.assertNotIn("/build", text)
         self.assertNotIn("solana_send", text)
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SAMPLE = ROOT / "metis_offline" / "samples" / "legacy-unknown.json"
+
+
+def run_cli(argv, stdin_text=None):
+    from metis_offline.cli import main
+
+    old = sys.stdin
+    if stdin_text is not None:
+        sys.stdin = StringIO(stdin_text)
+    out, err = StringIO(), StringIO()
+    try:
+        with redirect_stdout(out), redirect_stderr(err):
+            code = main(argv)
+    finally:
+        sys.stdin = old
+    return code, out.getvalue(), err.getvalue()
+
+
+class CliTest(unittest.TestCase):
+    def test_sample_file_is_rejected_after_structural_decode(self):
+        code, out, err = run_cli([str(SAMPLE)])
+        self.assertEqual(err, "")
+        self.assertEqual(code, 2)
+        body = json.loads(out)
+        self.assertEqual(body["kind"], "rejected")
+        self.assertEqual(body["instruction_semantics"], "unverified")
+        self.assertIs(body["trade_authorized"], False)
+        self.assertIs(body["structural_decode"], True)
+        self.assertEqual(body["reason"], "unknown_program")
+        self.assertEqual(body["version"], "legacy")
+        self.assertEqual(body["fee_payer_hex"], FEE_PAYER.hex())
+
+    def test_stdin_bad_base64_is_a_rejection_not_a_crash(self):
+        payload = {
+            "transaction_b64": "????",
+            "user_hex": FEE_PAYER.hex(),
+            "input_mint_hex": (bytes([4]) * 32).hex(),
+            "output_mint_hex": (bytes([5]) * 32).hex(),
+            "amount": 1,
+            "slippage_bps": None,
+        }
+        code, out, err = run_cli(["-"], json.dumps(payload))
+        self.assertEqual(code, 2)
+        self.assertEqual(err, "")
+        body = json.loads(out)
+        self.assertEqual(body["reason"], "bad_base64")
+        self.assertIs(body["structural_decode"], False)
+        self.assertIs(body["trade_authorized"], False)
+
+    def test_invalid_json_and_missing_file_are_program_failures(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "bad.json"
+            bad.write_text("{", encoding="utf-8")
+            code, out, err = run_cli([str(bad)])
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        self.assertIn("JSON", err)
+        code, out, err = run_cli([str(ROOT / "missing-metis-input.json")])
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        self.assertIn("no such file", err)
+
+    def test_wrapper_selects_the_repo_venv_from_another_directory(self):
+        proc = subprocess.run(
+            [str(ROOT / "metis-offline"), str(SAMPLE)],
+            cwd=tempfile.gettempdir(),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 2)
+        self.assertEqual(proc.stderr, "")
+        body = json.loads(proc.stdout)
+        self.assertEqual(body["reason"], "unknown_program")
+        self.assertIs(body["trade_authorized"], False)
 
 
 if __name__ == "__main__":

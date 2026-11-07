@@ -545,3 +545,5 @@ It proves that one pinned decoder rejects the synthetic fixtures for the reasons
 It does not prove a swap is safe, that instruction data or CPI does what the caller intends, that a lookup table's on-chain bytes match a build, that `solana_send` accepts the bytes, or that a signature is final. It does not choose `slippageBps`. It does not call Jupiter or Phantom. A later live design still needs its own approval.
 
 The three previously recorded gaps are closed in the offline decoder. `evaluate` calls `check_slippage` when no instruction is present, and neither `None` nor `50` is approved. An instruction whose program is not on the empty allowlist is still `unknown_program`, including when slippage is `50`. A non-zero version prefix is `unsupported_version`, while a short byte string stays `truncated`. `signature_count` has a regression test. None of these results is `approved`.
+
+`./metis-offline` is the offline command for the same decoder. It selects `.venv-metis-offline/bin/python` and does not install packages. Usage is `docs/metis-offline.md`. A completed check exits 2 because the report is rejected. A missing interpreter or invalid request exits 1.
