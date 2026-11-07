@@ -41,6 +41,8 @@ def evaluate(wire_b64: str, intent: Intent) -> DecodeReport:
     zeros = all(sig == bytes(64) for sig in signatures)
     if not zeros:
         return _reject("signature_not_zero", True, version, None, False)
+    if not tx.message.account_keys:
+        return _reject("truncated", True, version, None, zeros)
     fee_payer = bytes(tx.message.account_keys[0])
     if header.num_readonly_signed_accounts > 0:
         return _reject("readonly", True, version, fee_payer, True)

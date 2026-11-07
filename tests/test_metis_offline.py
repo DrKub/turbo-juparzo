@@ -115,6 +115,14 @@ class DecodeTest(unittest.TestCase):
         self.assertEqual(check_amount(intent(), 2), "intent_mismatch")
         self.assertEqual(check_amount(intent(), 1), "slippage_unapproved")
 
+    def test_zero_signature_count_without_accounts_does_not_raise(self):
+        raw = bytearray(base64.b64decode(LEGACY_B64))
+        raw[0] = 0
+        report = evaluate(base64.b64encode(bytes(raw)).decode("ascii"), intent())
+        self.assertEqual(report.kind, "rejected")
+        self.assertEqual(report.reason, "truncated")
+        self.assertEqual(report.instruction_semantics, "unverified")
+
     def test_package_has_no_network_client(self):
         from pathlib import Path
 

@@ -107,6 +107,16 @@
       "instruction_semantics": "unverified",
       "signatures_all_zero": true,
       "fee_payer_is_synthetic_0x01": true
+    },
+    {
+      "case": "zero_signature_count_byte_no_accounts",
+      "parsed": true,
+      "version": "legacy",
+      "reason": "truncated",
+      "kind": "rejected",
+      "instruction_semantics": "unverified",
+      "signatures_all_zero": true,
+      "fee_payer_is_synthetic_0x01": false
     }
   ]
 }
