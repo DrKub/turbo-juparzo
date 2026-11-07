@@ -4,7 +4,7 @@ import unittest
 from solders.message import MessageV0
 from solders.transaction import VersionedTransaction
 
-from metis_offline.decode import evaluate
+from metis_offline.decode import check_amount, check_slippage, evaluate
 from metis_offline.fixtures import DEAD_BLOCKHASH, FEE_PAYER, LEGACY_B64, NONZERO_SIG_B64, PROGRAM_ID, TABLE_ID, V0_B64
 from metis_offline.report import DecodeReport, Intent
 
@@ -100,6 +100,29 @@ class DecodeTest(unittest.TestCase):
         self.assertEqual(report.reason, "unknown_program")
         self.assertEqual(report.kind, "rejected")
         self.assertEqual(report.instruction_semantics, "unverified")
+
+    def test_example_slippage_is_not_approved(self):
+        self.assertEqual(check_slippage(intent()), "slippage_unapproved")
+        example = Intent(FEE_PAYER, bytes([4]) * 32, bytes([5]) * 32, 1, 50, {})
+        self.assertEqual(check_slippage(example), "slippage_unapproved")
+
+    def test_amount_mismatch_is_not_a_swap_approval(self):
+        report = evaluate(LEGACY_B64, intent())
+        self.assertEqual(report.reason, "unknown_program")
+        self.assertNotEqual(report.kind, "approved")
+
+    def test_matching_amount_is_still_not_approved(self):
+        self.assertEqual(check_amount(intent(), 2), "intent_mismatch")
+        self.assertEqual(check_amount(intent(), 1), "slippage_unapproved")
+
+    def test_package_has_no_network_client(self):
+        from pathlib import Path
+
+        text = "\n".join(path.read_text(encoding="utf-8") for path in Path("metis_offline").rglob("*.py"))
+        self.assertNotIn("urlopen", text)
+        self.assertNotIn("/execute", text)
+        self.assertNotIn("/build", text)
+        self.assertNotIn("solana_send", text)
 
 
 if __name__ == "__main__":

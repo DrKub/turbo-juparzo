@@ -7,6 +7,17 @@ from solders.transaction import VersionedTransaction
 from metis_offline.report import DecodeReport, Intent
 
 
+def check_slippage(intent: Intent) -> str:
+    del intent
+    return "slippage_unapproved"
+
+
+def check_amount(intent: Intent, actual: int) -> str:
+    if actual != intent.amount:
+        return "intent_mismatch"
+    return check_slippage(intent)
+
+
 def _reject(reason: str, parsed: bool = False, version: str | None = None, fee_payer: bytes | None = None, zeros: bool | None = None) -> DecodeReport:
     return DecodeReport(parsed, version, reason, fee_payer, zeros)
 
