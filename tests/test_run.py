@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 from executor.config import load_config
 from executor.journal import CrashBeforeRename, load_records
@@ -18,11 +19,13 @@ class FakeTransport:
 
     def get(self, url, headers):
         self.calls.append((url, dict(headers)))
-        amount = url.split("amount=")[1].split("&")[0]
+        query = parse_qs(urlparse(url).query)
         out_amount = self.out_amounts.pop(0)
         body = {
             "router": "metis",
-            "inAmount": amount,
+            "inputMint": query["inputMint"][0],
+            "outputMint": query["outputMint"][0],
+            "inAmount": query["amount"][0],
             "outAmount": out_amount,
             "transaction": None,
         }
@@ -400,9 +403,17 @@ class RunTest(unittest.TestCase):
 
             def get(self, url, headers):
                 self.calls += 1
-                amount = url.split("amount=")[1].split("&")[0]
+                query = parse_qs(urlparse(url).query)
+                amount = query["amount"][0]
                 if self.calls == 1:
-                    return 200, {"transaction": None, "inAmount": amount, "outAmount": "1000000000", "router": "metis"}
+                    return 200, {
+                        "transaction": None,
+                        "inputMint": query["inputMint"][0],
+                        "outputMint": query["outputMint"][0],
+                        "inAmount": amount,
+                        "outAmount": "1000000000",
+                        "router": "metis",
+                    }
                 return 200, {"transaction": "AQID", "inAmount": amount, "outAmount": "1000000000"}
 
         transport = OnceUnsafe()

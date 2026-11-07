@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import stat
 from pathlib import Path
 
 from executor.integers import parse_nonneg, parse_pos
@@ -46,9 +47,34 @@ def _contained(root: Path, relative: Path) -> Path:
     return target
 
 
+def _fsync_directory(directory: Path) -> None:
+    descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _fsync_up_to_root(root: Path, directory: Path) -> None:
+    root_resolved = root.resolve()
+    current = directory.resolve()
+    chain = []
+    while True:
+        chain.append(current)
+        if current == root_resolved:
+            break
+        parent = current.parent
+        if parent == current or root_resolved not in current.parents:
+            raise JournalError("unsafe journal path")
+        current = parent
+    for item in chain:
+        _fsync_directory(item)
+
+
 def commit_record(root: Path, relative: Path, payload: dict, *, crash: bool = False) -> None:
     target = _contained(root, relative)
     target.parent.mkdir(parents=True, exist_ok=True)
+    _fsync_up_to_root(root, target.parent)
     temporary = target.parent / f".{target.name}.tmp"
     data = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     with temporary.open("wb") as handle:
@@ -58,11 +84,7 @@ def commit_record(root: Path, relative: Path, payload: dict, *, crash: bool = Fa
     if crash:
         raise CrashBeforeRename(temporary)
     os.replace(temporary, target)
-    directory = os.open(target.parent, os.O_RDONLY)
-    try:
-        os.fsync(directory)
-    finally:
-        os.close(directory)
+    _fsync_up_to_root(root, target.parent)
 
 
 def discard_temps(root: Path) -> None:
@@ -104,21 +126,53 @@ def _required_pos(value: object) -> int:
     return parsed
 
 
+def _regular_file(path: Path) -> os.stat_result:
+    if path.is_symlink():
+        raise JournalError("journal corrupt")
+    info = path.lstat()
+    if not stat.S_ISREG(info.st_mode):
+        raise JournalError("journal corrupt")
+    return info
+
+
 def load_records(root: Path) -> tuple[list[Receipt], list[MarkRecord]]:
     receipts: list[Receipt] = []
     marks: list[MarkRecord] = []
     journal = root / "journal"
     if not journal.exists():
         return receipts, marks
-    for path in sorted(journal.rglob("*.json")):
-        if path.name.startswith(".") or not path.is_file():
-            continue
+    if journal.is_symlink():
+        raise JournalError("journal corrupt")
+    seen_inodes: set[tuple[int, int]] = set()
+    paths: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(journal, followlinks=False):
+        current = Path(dirpath)
+        if current.is_symlink():
+            raise JournalError("journal corrupt")
+        for dirname in dirnames:
+            if (current / dirname).is_symlink():
+                raise JournalError("journal corrupt")
+        for filename in filenames:
+            path = current / filename
+            if path.suffix != ".json" or path.name.startswith("."):
+                continue
+            info = _regular_file(path)
+            ident = (info.st_dev, info.st_ino)
+            if ident in seen_inodes:
+                raise JournalError("journal corrupt")
+            seen_inodes.add(ident)
+            paths.append(path)
+    for path in sorted(paths):
         body = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(body, dict):
             raise JournalError("unknown record")
+        relative = path.relative_to(journal)
         if body.get("record_type") == "jupiter_dry_run_receipt":
             if body.get("status") != "dry_run":
                 raise JournalError("unknown record")
+            expected = Path(str(body.get("id"))) / f"{body.get('side')}.json"
+            if relative != expected:
+                raise JournalError("journal corrupt")
             receipts.append(
                 Receipt(
                     body["id"],
@@ -138,6 +192,9 @@ def load_records(root: Path) -> tuple[list[Receipt], list[MarkRecord]]:
                 )
             )
         elif body.get("record_type") == "jupiter_dry_run_mark":
+            expected = Path(str(body.get("buy_id"))) / "marks" / f"{body.get('n')}.json"
+            if relative != expected:
+                raise JournalError("journal corrupt")
             marks.append(
                 MarkRecord(
                     body["buy_id"],
@@ -150,4 +207,8 @@ def load_records(root: Path) -> tuple[list[Receipt], list[MarkRecord]]:
             )
         else:
             raise JournalError("unknown record")
+    keys = [(item.id, item.side) for item in receipts]
+    sequences = [item.seq for item in receipts] + [item.seq for item in marks]
+    if len(keys) != len(set(keys)) or len(sequences) != len(set(sequences)):
+        raise JournalError("journal corrupt")
     return receipts, marks

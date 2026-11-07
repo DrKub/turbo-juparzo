@@ -12,6 +12,13 @@ from executor.run import StopFlag, run
 from executor.startup import find_startup_refusal
 
 
+def bound_state(inbox: Path, state: str | None) -> Path:
+    inbox_absolute = Path(os.path.abspath(inbox))
+    if state is None:
+        return inbox_absolute.parent / "data" / "jupiter-dry-runs"
+    return Path(os.path.abspath(state))
+
+
 def install_sigterm(stop: StopFlag) -> None:
     def handler(signum, frame):
         stop.set()
@@ -37,7 +44,7 @@ def main(argv: list[str] | None = None, environ: Mapping[str, str] | None = None
     except (OSError, ConfigError, ValueError, json.JSONDecodeError):
         print("refused: config", file=sys.stderr)
         return 3
-    state = Path(values.get("--state", "data/jupiter-dry-runs"))
+    state = bound_state(Path(values["--inbox"]), values.get("--state"))
     stop = StopFlag()
     install_sigterm(stop)
     try:

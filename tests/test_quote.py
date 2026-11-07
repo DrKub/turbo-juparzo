@@ -18,6 +18,8 @@ def ok_body(**extra):
         "feeMint": MINT_A,
         "platformFee": {"amount": "1", "feeBps": 10, "feeMint": MINT_A, "ignored": True},
         "transaction": None,
+        "inputMint": SOL_MINT,
+        "outputMint": MINT_A,
         "requestId": "do-not-store",
         "inUsdValue": 12,
         "routePlan": [{"drop": True}],
@@ -65,6 +67,18 @@ class QuoteTest(unittest.TestCase):
         fake = FakeTransport(200, ok_body(), TimeoutError("slow"))
         self.assertIsInstance(quote_once(fake, request()), QuoteUnavailable)
         self.assertEqual(fake.calls[0][1], {})
+
+    def test_missing_transaction_or_mint_echo_is_not_a_quote(self):
+        spoof = {
+            "router": "spoof",
+            "inAmount": "80000000",
+            "outAmount": "10",
+        }
+        self.assertIsInstance(classify(request(), 200, spoof), QuoteUnavailable)
+        echoed = dict(spoof, transaction=None)
+        self.assertIsInstance(classify(request(), 200, echoed), QuoteUnavailable)
+        wrong = dict(echoed, inputMint=MINT_A, outputMint=SOL_MINT)
+        self.assertIsInstance(classify(request(), 200, wrong), QuoteUnavailable)
 
     def test_urllib_transport_builds_a_get_without_api_key(self):
         captured = {}

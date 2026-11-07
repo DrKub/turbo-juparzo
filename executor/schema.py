@@ -62,7 +62,7 @@ def parse_signal(body: object) -> Signal | SchemaRejection:
         side,
         body["mint"],
         body["created_at"],
-        (millis, signal_id, 0 if side == "buy" else 1),
+        (millis, 0 if side == "buy" else 1, signal_id),
         lamports,
         amount,
     )

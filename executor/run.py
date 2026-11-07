@@ -1,8 +1,9 @@
 import json
+import sys
 from pathlib import Path
 
 from executor.book import fold
-from executor.journal import commit_record, discard_temps, load_records, mark_path, receipt_path
+from executor.journal import JournalError, commit_record, discard_temps, load_records, mark_path, receipt_path
 from executor.lock import exclusive_lock
 from executor.marks import decide_mark
 from executor.quote import quote_once
@@ -49,6 +50,49 @@ def _signals(inbox: Path) -> list[Signal | SchemaRejection]:
             log_schema(item)
         parsed.append(item)
     return parsed
+
+
+def _same_signal(left: Signal, right: Signal) -> bool:
+    return (
+        left.id == right.id
+        and left.side == right.side
+        and left.mint == right.mint
+        and left.created_at == right.created_at
+        and left.size_lamports == right.size_lamports
+        and left.token_amount == right.token_amount
+    )
+
+
+def _candidates(pending: list[Signal | SchemaRejection]):
+    groups: dict[tuple[str, str], dict] = {}
+    order: list[tuple[str, str]] = []
+    for item in pending:
+        if isinstance(item, Signal):
+            key = (item.id, item.side)
+        elif isinstance(item, SchemaRejection) and item.id and item.side in {"buy", "sell"}:
+            key = (item.id, item.side)
+        else:
+            continue
+        if key not in groups:
+            order.append(key)
+            groups[key] = {"valid": [], "bad": False}
+        if isinstance(item, Signal):
+            groups[key]["valid"].append(item)
+        else:
+            groups[key]["bad"] = True
+    signals: list[Signal] = []
+    rejections: list[tuple[str, str]] = []
+    for key in order:
+        group = groups[key]
+        valids = group["valid"]
+        if len(valids) > 1 and any(not _same_signal(valids[0], other) for other in valids[1:]):
+            return "conflict", [], []
+        if valids:
+            signals.append(valids[0])
+        elif group["bad"]:
+            rejections.append(key)
+    signals.sort(key=lambda item: item.sort_key)
+    return "ok", signals, rejections
 
 
 def _refold(config: DryRunConfig, state: Path):
@@ -137,20 +181,29 @@ def run(
 ) -> int:
     flag = stop or StopFlag()
     crashes = [crash_commits]
+    try:
+        return _locked(config, inbox, state, transport, flag, crashes)
+    except JournalError:
+        print("journal corrupt", file=sys.stderr)
+        return 4
+
+
+def _locked(config, inbox, state, transport, flag, crashes) -> int:
     with exclusive_lock(state / "executor.lock"):
         discard_temps(state)
-        pending = _signals(inbox)
-        for item in pending:
-            if not isinstance(item, SchemaRejection) or not item.log_id or item.id is None or item.side not in {"buy", "sell"}:
-                continue
+        status, valid, rejections = _candidates(_signals(inbox))
+        if status == "conflict":
+            print("inbox conflict", file=sys.stderr)
+            return 4
+        for signal_id, side in rejections:
             receipts, marks, _book = _refold(config, state)
-            if any(record.id == item.id and record.side == item.side for record in receipts):
+            if any(record.id == signal_id and record.side == side for record in receipts):
                 continue
             _commit(
                 state,
                 Receipt(
-                    item.id,
-                    item.side,
+                    signal_id,
+                    side,
                     "rejected",
                     "signal",
                     SOL_MINT,
@@ -166,7 +219,6 @@ def run(
                 ),
                 crashes,
             )
-        valid = sorted((item for item in pending if isinstance(item, Signal)), key=lambda item: item.sort_key)
         for signal in valid:
             if flag.is_set():
                 return 0

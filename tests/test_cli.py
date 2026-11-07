@@ -9,6 +9,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 from executor.cli import install_sigterm, main
 from executor.run import StopFlag
@@ -130,8 +131,15 @@ class CliTest(unittest.TestCase):
             def get(self, url, headers):
                 entered.set()
                 release.wait(5)
-                amount = url.split("amount=")[1].split("&")[0]
-                return 200, {"transaction": None, "inAmount": amount, "outAmount": "10", "router": "metis"}
+                query = parse_qs(urlparse(url).query)
+                return 200, {
+                    "transaction": None,
+                    "inputMint": query["inputMint"][0],
+                    "outputMint": query["outputMint"][0],
+                    "inAmount": query["amount"][0],
+                    "outAmount": "10",
+                    "router": "metis",
+                }
 
         def poke():
             self.assertTrue(entered.wait(5))

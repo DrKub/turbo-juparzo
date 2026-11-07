@@ -92,7 +92,7 @@ Buy signals also require `size_sol` and forbid `token_amount`. Sell signals also
 
 The SOL side of every quote is the mint Jupiter documents for SOL, `So11111111111111111111111111111111111111112`. A signal whose `mint` is that address is rejected with reason `pair`. Buys quote SOL to the signal mint. Sells quote the signal mint to SOL. No other pair is quoted. The signal set does not create an allowlist.
 
-Processing order in one invocation is `created_at`, then `id`, then `side` with `buy` before `sell`. A record committed earlier in that same invocation is already in the fold when the next signal is checked.
+Processing order in one invocation is `created_at`, then side with `buy` before `sell`, then `id`. This is a targeted adjustment of the earlier `created_at`, then `id`, then side order. At one timestamp a sell whose id sorts first would otherwise be permanently rejected before the buy that opens its mint. An earlier sell is still processed before a later buy, so it cannot close a position that did not exist yet. A sell applies only to the open position whose base-unit balance equals `token_amount`. A record committed earlier in that same invocation is already in the fold when the next signal is checked. Two inbox files with the same `(id, side)` and different payloads halt the invocation with no new receipt. A malformed duplicate does not replace a valid copy of that key.
 
 ## Simulated book
 
@@ -159,7 +159,7 @@ Checked against Jupiter's docs on 2026-11-07:
 - [Execute](https://developers.jup.ag/docs/api-reference/swap/execute): `POST /swap/v2/execute` requires `signedTransaction` and `requestId`. This phase never calls it.
 - [Rate limits](https://developers.jup.ag/docs/portal/rate-limits): keyless tier is 0.5 requests per second and 30 requests per minute on a 60-second sliding window. `/execute` has a separate bucket and is still forbidden here.
 
-A quote is successful only when the HTTP status is 200, `transaction` is JSON null, `inAmount` equals the requested amount, and `outAmount` is a positive canonical integer string. Any present transaction string, including `""`, is `quote_unsafe`: the body is discarded, bytes are not stored, and the signer is not called. On an inbox signal, `quote_unsafe` is a terminal rejected receipt and is not retried. On a mark, `quote_unsafe` commits nothing. A non-200 status, a `429`, a timeout, a mint echo mismatch, or a missing amount also commits nothing, for both signals and marks. The next invocation may make one new read-only attempt for a key that has no terminal record. That retry is not exactly-once delivery, and it is safe only because nothing is signed or submitted. One invocation does not loop on failure.
+A quote is successful only when the HTTP status is 200, the `transaction` field is present and JSON null, `inputMint` and `outputMint` are present and equal the request, `inAmount` equals the requested amount, and `outAmount` is a positive canonical integer string. A missing `transaction` field is not treated as null. A missing mint echo is not a match. The short documentation example that omits the mint fields is not accepted, because those fields are how this phase checks the quote is for the requested pair. Any present transaction string, including `""`, is `quote_unsafe`: the body is discarded, bytes are not stored, and the signer is not called. On an inbox signal, `quote_unsafe` is a terminal rejected receipt and is not retried. On a mark, `quote_unsafe` commits nothing. A non-200 status, a `429`, a timeout, a mint echo mismatch, or a missing amount also commits nothing, for both signals and marks. The next invocation may make one new read-only attempt for a key that has no terminal record. That retry is not exactly-once delivery, and it is safe only because nothing is signed or submitted. One invocation does not loop on failure.
 
 The stored quote fields are `router`, `inAmount`, `outAmount`, `feeBps`, `feeMint`, and `platformFee` when present. `transaction`, `requestId`, route plans, and USD values are not stored. USD fields are not a performance result.
 
@@ -171,7 +171,7 @@ Default tests use a fake transport and zero network. The optional smoke command 
 
 The lock file is `data/jupiter-dry-runs/executor.lock`. The lock is `flock` or an equivalent non-blocking exclusive OS advisory lock. A second process fails to acquire it, exits code 2, and does not read the inbox, quote, or write. A crashed process does not leave a lock that an operator must delete.
 
-The journal file is the receipt. There is no second receipt copy.
+The journal file is the receipt. There is no second receipt copy. A symlink, a second hard link, a repeated `(id, side)`, a repeated `seq`, or a quoted sell with no matching open position halts the process. The halt does not credit the sell and does not rewrite the journal.
 
 - `data/jupiter-dry-runs/journal/<id>/<side>.json`
 

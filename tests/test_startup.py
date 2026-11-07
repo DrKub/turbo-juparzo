@@ -19,6 +19,13 @@ class StartupTest(unittest.TestCase):
             ([], {"EXECUTE_URL": "https://api.jup.ag/swap/v2/execute"}, "refused: live"),
             (["--build-url", "https://api.jup.ag/swap/v2/build"], {}, "refused: live"),
             (["--mystery"], {}, "refused: config"),
+            ([], {"MODE": "LIVE"}, "refused: live"),
+            ([], {"LIVE": "true"}, "refused: live"),
+            ([], {"DRY_RUN": "False"}, "refused: live"),
+            ([], {"DRY_RUN": "no"}, "refused: live"),
+            ([], {"SOLANA_PRIVATE_KEY": secret}, "refused: live"),
+            ([], {"HELIUS_API_KEY": secret}, "refused: live"),
+            ([], {"PHANTOM_SESSION": secret}, "refused: live"),
         ]
         for argv, env, expected in cases:
             message = find_startup_refusal(argv, env)

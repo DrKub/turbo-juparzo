@@ -37,6 +37,25 @@ class SchemaTest(unittest.TestCase):
         self.assertIsInstance(sell, Signal)
         self.assertEqual(sell.token_amount, 1000)
         self.assertLess(parsed.sort_key, sell.sort_key)
+        same_time_sell = parse_signal(
+            {
+                "id": "a-sell",
+                "side": "sell",
+                "mint": MINT_A,
+                "created_at": "2026-11-07T10:00:00+02:00",
+                "token_amount": "1000",
+            }
+        )
+        same_time_buy = parse_signal(
+            {
+                "id": "b-buy",
+                "side": "buy",
+                "mint": MINT_A,
+                "created_at": "2026-11-07T10:00:00+02:00",
+                "size_sol": "0.01",
+            }
+        )
+        self.assertLess(same_time_buy.sort_key, same_time_sell.sort_key)
 
     def test_rejects_unknown_fields_zero_and_unsafe_ids_without_logging_the_body(self):
         cases = [
