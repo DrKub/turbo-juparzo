@@ -1,8 +1,11 @@
 import base64
 import unittest
 
+from solders.message import MessageV0
+from solders.transaction import VersionedTransaction
+
 from metis_offline.decode import evaluate
-from metis_offline.fixtures import DEAD_BLOCKHASH, FEE_PAYER, LEGACY_B64, NONZERO_SIG_B64, PROGRAM_ID
+from metis_offline.fixtures import DEAD_BLOCKHASH, FEE_PAYER, LEGACY_B64, NONZERO_SIG_B64, PROGRAM_ID, TABLE_ID, V0_B64
 from metis_offline.report import DecodeReport, Intent
 
 
@@ -44,6 +47,21 @@ class DecodeTest(unittest.TestCase):
         self.assertEqual(report.fee_payer, FEE_PAYER)
         self.assertEqual(report.reason, "unknown_program")
         self.assertEqual(report.instruction_semantics, "unverified")
+
+    def test_v0_fixture_has_zero_signature_blockhash_and_index_7(self):
+        from metis_offline.synthetic import build_v0_b64
+
+        self.assertEqual(V0_B64, build_v0_b64())
+        tx = VersionedTransaction.from_bytes(base64.b64decode(V0_B64))
+        self.assertIsInstance(tx.message, MessageV0)
+        self.assertEqual(bytes(tx.signatures[0]), bytes(64))
+        self.assertEqual(bytes(tx.message.recent_blockhash), bytes(32))
+        self.assertEqual(bytes(tx.message.account_keys[0]), FEE_PAYER)
+        self.assertEqual(bytes(tx.message.account_keys[1]), PROGRAM_ID)
+        lookup = tx.message.address_table_lookups[0]
+        self.assertEqual(bytes(lookup.account_key), TABLE_ID)
+        self.assertEqual(list(lookup.writable_indexes), [7])
+        self.assertEqual(list(lookup.readonly_indexes), [])
 
 
 if __name__ == "__main__":

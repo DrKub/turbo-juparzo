@@ -61,7 +61,7 @@ python3 -m venv .venv-metis-offline
 
 The last command is the full gate after the new package exists. Do not set `HTTP_PROXY`, API keys, or wallet variables for that install. `pip` may use the machine's existing proxy policy. Do not clear it.
 
-If `VersionedTransaction.from_bytes` rejects `LEGACY_B64` or `V0_B64`, stop. Those strings are the fixture. Do not replace them with a networked build.
+`LEGACY_B64` is parsed by `solders` 0.29.0. The first published `V0_B64` began with `0x80` and had no signature vector, so `VersionedTransaction.from_bytes` raised `invalid transaction discriminator`. That string was replaced, with explicit approval, by the offline `solders==0.29.0` serialization from `metis_offline/synthetic.py`: one 64-byte zero signature, a 32-byte zero blockhash, and writable lookup index 7. Do not replace either fixture with a networked build.
 
 ---
 
@@ -121,7 +121,7 @@ solders==0.29.0
 ```python
 # metis_offline/fixtures.py
 LEGACY_B64 = "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAECAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQEAAA=="
-V0_B64 = "gAEAAQIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAQAAAQMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAQcA"
+V0_B64 = "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAQABAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEBAAABAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMBBwA="
 NONZERO_SIG_B64 = "AQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAECAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQEAAA=="
 FEE_PAYER = bytes([1]) * 32
 PROGRAM_ID = bytes([2]) * 32
@@ -129,7 +129,7 @@ TABLE_ID = bytes([3]) * 32
 DEAD_BLOCKHASH = bytes(32)
 ```
 
-`LEGACY_B64` is one zero signature, fee payer `0x01` repeated, program `0x02` repeated, and a 32-byte zero blockhash. `V0_B64` is the same accounts plus one lookup table `0x03` repeated whose writable index is 7. Neither is a real swap.
+`LEGACY_B64` is one zero signature, fee payer `0x01` repeated, program `0x02` repeated, and a 32-byte zero blockhash. `V0_B64` is the `solders` 0.29.0 wire form of the same accounts: signature count, 64 zero signature bytes, version byte `0x80`, then the message, plus lookup table `0x03` repeated whose writable index is 7. `metis_offline/synthetic.py` reproduces that string with no network. Neither fixture is a real swap.
 
 ```python
 # metis_offline/report.py
