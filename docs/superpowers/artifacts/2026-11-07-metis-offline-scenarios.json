@@ -1,0 +1,112 @@
+{
+  "decoder": "metis_offline.evaluate",
+  "solders": "0.29.0",
+  "network": false,
+  "approved_results": 0,
+  "slippage_none": "slippage_unapproved",
+  "slippage_example_50": "slippage_unapproved",
+  "amount_mismatch": "intent_mismatch",
+  "amount_match_still_unapproved": "slippage_unapproved",
+  "cases": [
+    {
+      "case": "bad_base64",
+      "parsed": false,
+      "version": null,
+      "reason": "bad_base64",
+      "kind": "rejected",
+      "instruction_semantics": "unverified",
+      "signatures_all_zero": null,
+      "fee_payer_is_synthetic_0x01": false
+    },
+    {
+      "case": "truncated",
+      "parsed": false,
+      "version": null,
+      "reason": "truncated",
+      "kind": "rejected",
+      "instruction_semantics": "unverified",
+      "signatures_all_zero": null,
+      "fee_payer_is_synthetic_0x01": false
+    },
+    {
+      "case": "nonzero_signature",
+      "parsed": true,
+      "version": "legacy",
+      "reason": "signature_not_zero",
+      "kind": "rejected",
+      "instruction_semantics": "unverified",
+      "signatures_all_zero": false,
+      "fee_payer_is_synthetic_0x01": false
+    },
+    {
+      "case": "legacy_unknown_program",
+      "parsed": true,
+      "version": "legacy",
+      "reason": "unknown_program",
+      "kind": "rejected",
+      "instruction_semantics": "unverified",
+      "signatures_all_zero": true,
+      "fee_payer_is_synthetic_0x01": true
+    },
+    {
+      "case": "wrong_fee_payer",
+      "parsed": true,
+      "version": "legacy",
+      "reason": "fee_payer",
+      "kind": "rejected",
+      "instruction_semantics": "unverified",
+      "signatures_all_zero": true,
+      "fee_payer_is_synthetic_0x01": true
+    },
+    {
+      "case": "readonly_signer",
+      "parsed": true,
+      "version": "legacy",
+      "reason": "readonly",
+      "kind": "rejected",
+      "instruction_semantics": "unverified",
+      "signatures_all_zero": true,
+      "fee_payer_is_synthetic_0x01": true
+    },
+    {
+      "case": "v0_alt_missing",
+      "parsed": true,
+      "version": "v0",
+      "reason": "alt_missing",
+      "kind": "rejected",
+      "instruction_semantics": "unverified",
+      "signatures_all_zero": true,
+      "fee_payer_is_synthetic_0x01": true
+    },
+    {
+      "case": "v0_alt_index",
+      "parsed": true,
+      "version": "v0",
+      "reason": "alt_index",
+      "kind": "rejected",
+      "instruction_semantics": "unverified",
+      "signatures_all_zero": true,
+      "fee_payer_is_synthetic_0x01": true
+    },
+    {
+      "case": "v0_alt_unaligned",
+      "parsed": true,
+      "version": "v0",
+      "reason": "alt_missing",
+      "kind": "rejected",
+      "instruction_semantics": "unverified",
+      "signatures_all_zero": true,
+      "fee_payer_is_synthetic_0x01": true
+    },
+    {
+      "case": "v0_resolved_still_unknown_program",
+      "parsed": true,
+      "version": "v0",
+      "reason": "unknown_program",
+      "kind": "rejected",
+      "instruction_semantics": "unverified",
+      "signatures_all_zero": true,
+      "fee_payer_is_synthetic_0x01": true
+    }
+  ]
+}

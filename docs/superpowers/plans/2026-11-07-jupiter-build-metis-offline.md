@@ -1,12 +1,12 @@
 # Metis Offline Decoder Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add an isolated offline decoder that rejects synthetic unsigned legacy and v0 transactions for explicit structural reasons and never calls a transaction approved.
 
 **Architecture:** A new `metis_offline` package parses standard-base64 wire bytes with `solders==0.29.0`, checks the header, zero signatures, fee payer, readonly flag, and address-lookup indexes, then always returns `kind="rejected"` with `instruction_semantics="unverified"`. It does not build, sign, send, or import `executor`.
 
-**Tech Stack:** Python 3.12, `solders==0.29.0` inside a separate virtualenv. No other dependencies.
+**Tech Stack:** Python 3.12 and a separate virtualenv. Direct requirement `solders==0.29.0`. The resolved install also pins its declared dependencies `jsonalias==0.1.1` and `typing-extensions==4.16.0` in `requirements-metis-offline.txt`.
 
 ## Global Constraints
 
@@ -33,7 +33,7 @@ These remain separate future approvals. This plan does not claim compatibility w
 
 ## File structure
 
-- Create: `requirements-metis-offline.txt` — one pinned line, `solders==0.29.0`.
+- Create: `requirements-metis-offline.txt` — `solders==0.29.0`, `jsonalias==0.1.1`, and `typing-extensions==4.16.0`.
 - Create: `metis_offline/__init__.py` — exports `evaluate`.
 - Create: `metis_offline/fixtures.py` — synthetic base64 and fake 32-byte keys. No real wallet and no live blockhash.
 - Create: `metis_offline/report.py` — `DecodeReport` and reason constants.
@@ -59,7 +59,7 @@ python3 -m venv .venv-metis-offline
 .venv-metis-offline/bin/python -m unittest discover -s tests -v
 ```
 
-The last command is the full gate after the new package exists. Do not set `HTTP_PROXY`, API keys, or wallet variables for that install. `pip` may use the machine's existing proxy policy. Do not clear it.
+The last command is the full gate after the new package exists. It must be the virtualenv interpreter. System Python without `solders` cannot import `tests/test_metis_offline.py`; `python3 -m unittest discover -s tests` then reports one import error and still runs the older executor tests. Do not set `HTTP_PROXY`, API keys, or wallet variables for that install. `pip` may use the machine's existing proxy policy. Do not clear it.
 
 `LEGACY_B64` is parsed by `solders` 0.29.0. The first published `V0_B64` began with `0x80` and had no signature vector, so `VersionedTransaction.from_bytes` raised `invalid transaction discriminator`. That string was replaced, with explicit approval, by the offline `solders==0.29.0` serialization from `metis_offline/synthetic.py`: one 64-byte zero signature, a 32-byte zero blockhash, and writable lookup index 7. Do not replace either fixture with a networked build.
 
@@ -79,7 +79,7 @@ The last command is the full gate after the new package exists. Do not set `HTTP
 - Consumes: nothing from `executor`
 - Produces: `DecodeReport`, `Intent`, `LEGACY_B64`, `V0_B64`, `NONZERO_SIG_B64`, `FEE_PAYER`, `PROGRAM_ID`, `DEAD_BLOCKHASH`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 import unittest
@@ -105,17 +105,19 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 -m unittest tests.test_metis_offline -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'metis_offline'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```text
 # requirements-metis-offline.txt
 solders==0.29.0
+jsonalias==0.1.1
+typing-extensions==4.16.0
 ```
 
 ```python
@@ -172,13 +174,13 @@ __all__ = ["DecodeReport", "Intent"]
 
 Append `.venv-metis-offline/` to `.gitignore`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m unittest tests.test_metis_offline -v`
 
 Expected: PASS, `Ran 1 test`. This step does not import `solders`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add requirements-metis-offline.txt metis_offline/__init__.py metis_offline/fixtures.py metis_offline/report.py tests/test_metis_offline.py .gitignore
@@ -197,7 +199,7 @@ git commit -m "feat: add the offline Metis report types"
 - Consumes: `DecodeReport`, `Intent`, `LEGACY_B64`, `V0_B64`, `NONZERO_SIG_B64`, `FEE_PAYER`
 - Produces: `evaluate(wire_b64: str, intent: Intent) -> DecodeReport`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_metis_offline.py`:
 
@@ -238,13 +240,13 @@ class DecodeTest(unittest.TestCase):
 
 Do not assert `V0_B64` in this task. Task 4 owns it.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 -m venv .venv-metis-offline && .venv-metis-offline/bin/pip install -r requirements-metis-offline.txt && .venv-metis-offline/bin/python -m unittest tests.test_metis_offline.DecodeTest -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'metis_offline.decode'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # metis_offline/decode.py
@@ -290,13 +292,13 @@ def evaluate(wire_b64: str, intent: Intent) -> DecodeReport:
 
 Export `evaluate` from `metis_offline/__init__.py`. Task 4 inserts the lookup-table checks immediately before this `unknown_program` return.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv-metis-offline/bin/python -m unittest tests.test_metis_offline -v`
 
 Expected: PASS. `LEGACY_B64` parses as legacy and returns `unknown_program`. `NONZERO_SIG_B64` returns `signature_not_zero`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add metis_offline/decode.py metis_offline/__init__.py tests/test_metis_offline.py
@@ -313,7 +315,7 @@ git commit -m "feat: reject malformed offline transaction bytes"
 - Consumes: `evaluate`, `Intent`, `LEGACY_B64`, `FEE_PAYER`
 - Produces: no new names
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
     def test_wrong_fee_payer_and_readonly_signer_reject(self):
@@ -331,23 +333,23 @@ git commit -m "feat: reject malformed offline transaction bytes"
 
 `mutable[1 + 64 + 1]` is `num_readonly_signed_accounts`. Setting it to 1 marks the only signer readonly.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv-metis-offline/bin/python -m unittest tests.test_metis_offline.DecodeTest.test_wrong_fee_payer_and_readonly_signer_reject -v`
 
 Expected: FAIL because the new method is missing, then PASS after the method is added if Task 2's order is already fee payer before unknown program. If the failure is `AssertionError: 'unknown_program' != 'fee_payer'`, the implementation order is wrong. Move the `fee_payer` and `readonly` returns above `unknown_program`. Do not weaken the assertions.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Keep the order in `evaluate`: signature count, zero signatures, readonly signed accounts, fee payer, lookup tables, then `unknown_program`. No other change if Step 2 passes once the test method exists.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv-metis-offline/bin/python -m unittest tests.test_metis_offline -v`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add metis_offline/decode.py tests/test_metis_offline.py
@@ -364,7 +366,7 @@ git commit -m "feat: reject a mismatched fee payer and readonly signer"
 - Consumes: `evaluate`, `V0_B64`, `TABLE_ID`, `Intent.captured_tables`
 - Produces: reasons `alt_missing` and `alt_index` before `unknown_program`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 from metis_offline.fixtures import TABLE_ID, V0_B64
@@ -383,13 +385,13 @@ from metis_offline.fixtures import TABLE_ID, V0_B64
 
 `V0_B64` asks for writable index 7. A captured table of 32 bytes holds one address, so index 7 is out of range. The table bytes are synthetic. They are not fetched.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv-metis-offline/bin/python -m unittest tests.test_metis_offline.DecodeTest.test_v0_without_captured_table_is_alt_missing tests.test_metis_offline.DecodeTest.test_lookup_index_past_captured_table_is_alt_index -v`
 
 Expected: FAIL with `AssertionError` because Task 2 returns `alt_missing` for every lookup and never `alt_index`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Replace the lookup return in `evaluate` with:
 
@@ -410,13 +412,13 @@ Replace the lookup return in `evaluate` with:
 
 A captured table that covers every index still falls through to `unknown_program`. Resolving an index does not approve the instruction. There is no RPC call.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv-metis-offline/bin/python -m unittest tests.test_metis_offline -v`
 
 Expected: PASS. `V0_B64` with empty `captured_tables` is `alt_missing`. The same bytes with a 32-byte table are `alt_index`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add metis_offline/decode.py tests/test_metis_offline.py
@@ -433,7 +435,7 @@ git commit -m "feat: reject unresolved address lookup tables"
 - Consumes: `evaluate`, `Intent`, `LEGACY_B64`
 - Produces: reasons `slippage_unapproved` and `intent_mismatch`. Neither is reachable on `LEGACY_B64` until the program is known, which this phase never grants. The tests therefore call a helper `check_slippage(intent: Intent) -> str` that the public `evaluate` also uses when structure would otherwise fall through a known program. Because no program is known, `evaluate` on `LEGACY_B64` stays `unknown_program`. `check_slippage` is the explicit gate.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 from metis_offline.decode import check_amount, check_slippage
@@ -451,13 +453,13 @@ from metis_offline.decode import check_amount, check_slippage
 
 `50` is an example integer from Jupiter's build table. It is not an accepted policy.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv-metis-offline/bin/python -m unittest tests.test_metis_offline.DecodeTest.test_example_slippage_is_not_approved -v`
 
 Expected: FAIL with `ImportError: cannot import name 'check_slippage'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 def check_slippage(intent: Intent) -> str:
@@ -491,13 +493,13 @@ Add this source boundary assertion in the same test file:
         self.assertNotIn("solana_send", text)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv-metis-offline/bin/python -m unittest tests.test_metis_offline -v`
 
 Expected: PASS. Every report is `rejected` and `unverified`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add metis_offline/decode.py tests/test_metis_offline.py
@@ -513,7 +515,7 @@ git commit -m "feat: reject unapproved slippage without approving a swap"
 - Consumes: the package from Tasks 1 through 5
 - Produces: the recorded command output. No new API.
 
-- [ ] **Step 1: Run the new module and the existing suite**
+- [x] **Step 1: Run the new module and the existing suite**
 
 Run:
 
@@ -525,7 +527,7 @@ Run:
 
 Expected: `compileall` prints nothing and exits 0. `test_metis_offline` passes. `discover` passes and includes the previous executor tests. A failure in an old executor test means this package imported or edited `executor`. Revert that edit.
 
-- [ ] **Step 2: Commit only if Step 1 required a fix**
+- [x] **Step 2: Commit only if Step 1 required a fix**
 
 ```bash
 git add metis_offline tests/test_metis_offline.py requirements-metis-offline.txt .gitignore
