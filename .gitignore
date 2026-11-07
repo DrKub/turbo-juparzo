@@ -2,3 +2,4 @@ data/jupiter-dry-runs/
 __pycache__/
 *.pyc
 .venv/
+.venv-metis-offline/
