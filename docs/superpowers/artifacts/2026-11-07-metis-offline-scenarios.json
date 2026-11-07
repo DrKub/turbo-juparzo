@@ -117,6 +117,66 @@
       "instruction_semantics": "unverified",
       "signatures_all_zero": true,
       "fee_payer_is_synthetic_0x01": false
+    },
+    {
+      "case": "no_instruction_slippage_none",
+      "parsed": true,
+      "version": "legacy",
+      "reason": "slippage_unapproved",
+      "kind": "rejected",
+      "instruction_semantics": "unverified",
+      "signatures_all_zero": true,
+      "fee_payer_is_synthetic_0x01": true
+    },
+    {
+      "case": "no_instruction_slippage_50",
+      "parsed": true,
+      "version": "legacy",
+      "reason": "slippage_unapproved",
+      "kind": "rejected",
+      "instruction_semantics": "unverified",
+      "signatures_all_zero": true,
+      "fee_payer_is_synthetic_0x01": true
+    },
+    {
+      "case": "legacy_instruction_slippage_50",
+      "parsed": true,
+      "version": "legacy",
+      "reason": "unknown_program",
+      "kind": "rejected",
+      "instruction_semantics": "unverified",
+      "signatures_all_zero": true,
+      "fee_payer_is_synthetic_0x01": true
+    },
+    {
+      "case": "version_prefix_v1",
+      "parsed": false,
+      "version": "v1",
+      "reason": "unsupported_version",
+      "kind": "rejected",
+      "instruction_semantics": "unverified",
+      "signatures_all_zero": null,
+      "fee_payer_is_synthetic_0x01": false
+    },
+    {
+      "case": "short_input_still_truncated",
+      "parsed": false,
+      "version": null,
+      "reason": "truncated",
+      "kind": "rejected",
+      "instruction_semantics": "unverified",
+      "signatures_all_zero": null,
+      "fee_payer_is_synthetic_0x01": false
+    },
+    {
+      "case": "empty_signature_vector",
+      "parsed": true,
+      "version": "v0",
+      "reason": "signature_count",
+      "kind": "rejected",
+      "instruction_semantics": "unverified",
+      "signatures_all_zero": null,
+      "fee_payer_is_synthetic_0x01": false
     }
   ]
 }

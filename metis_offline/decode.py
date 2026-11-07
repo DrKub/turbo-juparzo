@@ -22,6 +22,38 @@ def _reject(reason: str, parsed: bool = False, version: str | None = None, fee_p
     return DecodeReport(parsed, version, reason, fee_payer, zeros)
 
 
+def _compact_u16(raw: bytes, offset: int) -> tuple[int, int] | None:
+    value = 0
+    for shift in range(0, 21, 7):
+        if offset >= len(raw):
+            return None
+        byte = raw[offset]
+        offset += 1
+        value |= (byte & 0x7F) << shift
+        if byte & 0x80 == 0:
+            return value, offset
+    return None
+
+
+def _unsupported_version(raw: bytes) -> str | None:
+    parsed = _compact_u16(raw, 0)
+    if parsed is None:
+        return None
+    count, offset = parsed
+    if count > 64:
+        return None
+    offset += count * 64
+    if offset >= len(raw):
+        return None
+    marker = raw[offset]
+    if marker & 0x80 == 0:
+        return None
+    number = marker & 0x7F
+    if number == 0:
+        return None
+    return f"v{number}"
+
+
 def evaluate(wire_b64: str, intent: Intent) -> DecodeReport:
     try:
         raw = base64.b64decode(wire_b64, validate=True)
@@ -32,6 +64,9 @@ def evaluate(wire_b64: str, intent: Intent) -> DecodeReport:
     try:
         tx = VersionedTransaction.from_bytes(raw)
     except Exception:
+        version = _unsupported_version(raw)
+        if version is not None:
+            return _reject("unsupported_version", False, version, None, None)
         return _reject("truncated")
     version = "v0" if isinstance(tx.message, MessageV0) else "legacy"
     signatures = [bytes(sig) for sig in tx.signatures]
@@ -58,4 +93,6 @@ def evaluate(wire_b64: str, intent: Intent) -> DecodeReport:
             indexes = list(lookup.writable_indexes) + list(lookup.readonly_indexes)
             if any(index >= limit for index in indexes):
                 return _reject("alt_index", True, version, fee_payer, True)
-    return _reject("unknown_program", True, version, fee_payer, True)
+    if len(tx.message.instructions) > 0:
+        return _reject("unknown_program", True, version, fee_payer, True)
+    return _reject(check_slippage(intent), True, version, fee_payer, True)

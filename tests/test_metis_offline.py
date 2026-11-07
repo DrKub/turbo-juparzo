@@ -1,7 +1,10 @@
 import base64
 import unittest
 
-from solders.message import MessageV0
+from solders.hash import Hash
+from solders.message import Message, MessageV0
+from solders.null_signer import NullSigner
+from solders.pubkey import Pubkey
 from solders.transaction import VersionedTransaction
 
 from metis_offline.decode import check_amount, check_slippage, evaluate
@@ -98,6 +101,47 @@ class DecodeTest(unittest.TestCase):
         self.assertTrue(report.parsed)
         self.assertEqual(report.version, "v0")
         self.assertEqual(report.reason, "unknown_program")
+        self.assertEqual(report.kind, "rejected")
+        self.assertEqual(report.instruction_semantics, "unverified")
+
+    def test_public_evaluator_rejects_every_slippage_value(self):
+        payer = Pubkey.from_bytes(FEE_PAYER)
+        message = Message.new_with_compiled_instructions(1, 0, 0, [payer], Hash.default(), [])
+        wire = base64.b64encode(bytes(VersionedTransaction(message, [NullSigner(payer)]))).decode("ascii")
+        for slippage in (None, 50):
+            report = evaluate(wire, Intent(FEE_PAYER, bytes([4]) * 32, bytes([5]) * 32, 1, slippage, {}))
+            self.assertTrue(report.parsed)
+            self.assertEqual(report.version, "legacy")
+            self.assertEqual(report.reason, "slippage_unapproved")
+            self.assertEqual(report.kind, "rejected")
+            self.assertEqual(report.instruction_semantics, "unverified")
+        still_unknown = evaluate(LEGACY_B64, Intent(FEE_PAYER, bytes([4]) * 32, bytes([5]) * 32, 1, 50, {}))
+        self.assertEqual(still_unknown.reason, "unknown_program")
+        self.assertEqual(still_unknown.kind, "rejected")
+
+    def test_v1_prefix_is_unsupported_version_and_short_input_stays_truncated(self):
+        raw = bytearray(base64.b64decode(V0_B64))
+        self.assertEqual(raw[65], 0x80)
+        raw[65] = 0x81
+        report = evaluate(base64.b64encode(bytes(raw)).decode("ascii"), intent())
+        self.assertEqual(report.reason, "unsupported_version")
+        self.assertEqual(report.version, "v1")
+        self.assertFalse(report.parsed)
+        self.assertEqual(report.kind, "rejected")
+        self.assertEqual(report.instruction_semantics, "unverified")
+        short = evaluate(base64.b64encode(b"\x01\x02").decode("ascii"), intent())
+        self.assertEqual(short.reason, "truncated")
+        self.assertIsNone(short.version)
+
+    def test_required_signer_with_no_signature_vector_is_signature_count(self):
+        parsed = VersionedTransaction.from_bytes(base64.b64decode(V0_B64))
+        self.assertEqual(parsed.message.header.num_required_signatures, 1)
+        bare = VersionedTransaction.populate(parsed.message, [])
+        self.assertEqual(len(bare.signatures), 0)
+        report = evaluate(base64.b64encode(bytes(bare)).decode("ascii"), intent())
+        self.assertTrue(report.parsed)
+        self.assertEqual(report.version, "v0")
+        self.assertEqual(report.reason, "signature_count")
         self.assertEqual(report.kind, "rejected")
         self.assertEqual(report.instruction_semantics, "unverified")
 
