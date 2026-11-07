@@ -1,6 +1,6 @@
 # Jupiter Dry-Run Executor Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Build one offline-tested Python process that turns copied memedesk JSON signals into isolated Jupiter quote-only dry-run receipts.
 
@@ -191,7 +191,7 @@ def main(argv: list[str] | None = None, environ: Mapping[str, str] | None = None
 - Consumes: nothing
 - Produces: `SOL_MINT`, `ORDER_URL`, `USDC_MINT`, `SMOKE_AMOUNT`, `BuyEstimate`, `DryRunConfig`, `Signal`, `SchemaRejection`, `QuoteRequest`, `StoredQuote`, `QuoteSuccess`, `QuoteUnsafe`, `QuoteUnavailable`, `Receipt`, `MarkRecord`, `Position`, `Book`, `MINT_A`, `MINT_B`, `MINT_C`, `MINT_D`, `MINT_DENIED`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_types.py
@@ -214,13 +214,13 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 -m unittest tests.test_types -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'executor'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # executor/__init__.py
@@ -363,13 +363,13 @@ __pycache__/
 .venv/
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m unittest tests.test_types -v`
 
 Expected: PASS, `Ran 1 test`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add executor/__init__.py executor/types.py tests/fixtures.py tests/test_types.py .gitignore
@@ -386,7 +386,7 @@ git commit -m "feat: add dry-run types and ignore runtime state"
 - Consumes: nothing
 - Produces: `parse_size_lamports(value: object) -> int | None`, `parse_nonneg(value: object) -> int | None`, `parse_pos(value: object) -> int | None`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_integers.py
@@ -420,13 +420,13 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 -m unittest tests.test_integers -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'executor.integers'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # executor/integers.py
@@ -459,13 +459,13 @@ def parse_size_lamports(value: object) -> int | None:
     return lamports
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m unittest tests.test_integers -v`
 
 Expected: PASS, `Ran 2 tests`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add executor/integers.py tests/test_integers.py
@@ -483,7 +483,7 @@ git commit -m "feat: parse exact lamport amounts"
 - Consumes: `BuyEstimate`, `DryRunConfig`, `parse_pos`, `MINT_A`, `MINT_DENIED`
 - Produces: `ConfigError`, `is_mint(value: object) -> bool`, `load_config(path: Path) -> DryRunConfig`, `sample_config(**overrides) -> dict`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_config.py
@@ -561,13 +561,13 @@ def sample_config(**overrides) -> dict:
     return body
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 -m unittest tests.test_config -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'executor.config'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # executor/config.py
@@ -645,13 +645,13 @@ def load_config(path: Path) -> DryRunConfig:
     return DryRunConfig(bank, metadata, denylist, estimates)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m unittest tests.test_config -v`
 
 Expected: PASS, `Ran 4 tests`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add executor/config.py tests/test_config.py tests/fixtures.py
@@ -668,7 +668,7 @@ git commit -m "feat: load the closed dry-run config"
 - Consumes: `SchemaRejection`, `Signal`, `is_mint`, `parse_pos`, `parse_size_lamports`, `MINT_A`
 - Produces: `parse_signal(body: object) -> Signal | SchemaRejection`, `log_schema(rejection: SchemaRejection) -> None`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_schema.py
@@ -735,13 +735,13 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 -m unittest tests.test_schema -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'executor.schema'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # executor/schema.py
@@ -815,13 +815,13 @@ def parse_signal(body: object) -> Signal | SchemaRejection:
     )
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m unittest tests.test_schema -v`
 
 Expected: PASS, `Ran 2 tests`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add executor/schema.py tests/test_schema.py
@@ -838,7 +838,7 @@ git commit -m "feat: validate inbox signal schema"
 - Consumes: nothing from the config loader
 - Produces: `find_startup_refusal(argv: list[str], env: Mapping[str, str]) -> str | None`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_startup.py
@@ -879,13 +879,13 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 -m unittest tests.test_startup -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'executor.startup'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # executor/startup.py
@@ -949,13 +949,13 @@ def find_startup_refusal(argv: list[str], env: Mapping[str, str]) -> str | None:
     return None
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m unittest tests.test_startup -v`
 
 Expected: PASS, `Ran 2 tests`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add executor/startup.py tests/test_startup.py
@@ -972,7 +972,7 @@ git commit -m "feat: refuse live and mandate startup"
 - Consumes: nothing
 - Produces: `SignerRefusal`, `sign(payload: bytes) -> bytes`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_signer.py
@@ -991,13 +991,13 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 -m unittest tests.test_signer -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'executor.signer'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # executor/signer.py
@@ -1009,13 +1009,13 @@ def sign(payload: bytes) -> bytes:
     raise SignerRefusal("signer refused")
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m unittest tests.test_signer -v`
 
 Expected: PASS, `Ran 1 test`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add executor/signer.py tests/test_signer.py
@@ -1032,7 +1032,7 @@ git commit -m "feat: refuse every signer call"
 - Consumes: `MarkRecord`, `Receipt`, `StoredQuote`
 - Produces: `receipt_payload(receipt: Receipt) -> dict`, `mark_payload(mark: MarkRecord) -> dict`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_records.py
@@ -1094,13 +1094,13 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 -m unittest tests.test_records -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'executor.records'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # executor/records.py
@@ -1159,13 +1159,13 @@ def mark_payload(mark: MarkRecord) -> dict:
     }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m unittest tests.test_records -v`
 
 Expected: PASS, `Ran 3 tests`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add executor/records.py tests/test_records.py
@@ -1182,7 +1182,7 @@ git commit -m "feat: serialize dry-run receipts and marks"
 - Consumes: `Book`, `BuyEstimate`, `DryRunConfig`, `Position`, `Signal`, `MINT_A`, `MINT_B`, `MINT_C`, `MINT_D`, `MINT_DENIED`
 - Produces: `prequote(config: DryRunConfig, book: Book, signal: Signal) -> str | None`, `denylist_label(config: DryRunConfig) -> str`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_risk.py
@@ -1261,13 +1261,13 @@ if __name__ == "__main__":
 
 The `buy(SOL_MINT)` call uses the mint as the first positional argument. `unknown_mint` for an unlisted mint is asserted before that line. `pair` is checked before metadata, so `SOL_MINT` does not need to be in `mint_metadata`.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 -m unittest tests.test_risk -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'executor.risk'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # executor/risk.py
@@ -1310,13 +1310,13 @@ def prequote(config: DryRunConfig, book: Book, signal: Signal) -> str | None:
     return None
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m unittest tests.test_risk -v`
 
 Expected: PASS, `Ran 3 tests`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add executor/risk.py tests/test_risk.py
@@ -1333,7 +1333,7 @@ git commit -m "feat: apply pre-quote risk checks"
 - Consumes: `Position`, `MINT_A`
 - Produces: `decide_mark(position: Position, mark_out: int, mark_in: int) -> str`, `apply_observation(position: Position, mark_out: int, mark_in: int) -> Position`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_marks.py
@@ -1371,13 +1371,13 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 -m unittest tests.test_marks -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'executor.marks'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # executor/marks.py
@@ -1406,13 +1406,13 @@ def apply_observation(position: Position, mark_out: int, mark_in: int) -> Positi
     return replace(position, high_out_lamports=high_out, high_in_base_units=high_in, armed=armed)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m unittest tests.test_marks -v`
 
 Expected: PASS, `Ran 1 test`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add executor/marks.py tests/test_marks.py
@@ -1431,7 +1431,7 @@ git commit -m "feat: decide stop and trailing observations"
 
 A transport `get` returns `(status: int, body: object)` and records the URL and headers it was given. `quote_once` passes `headers={}`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_quote.py
@@ -1542,13 +1542,13 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 -m unittest tests.test_quote -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'executor.quote'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # executor/quote.py
@@ -1619,13 +1619,13 @@ class UrllibTransport:
             return response.status, json.loads(response.read().decode("utf-8"))
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m unittest tests.test_quote -v`
 
 Expected: PASS, `Ran 4 tests`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add executor/quote.py tests/test_quote.py
@@ -1642,7 +1642,7 @@ git commit -m "feat: add the quote-only Jupiter adapter"
 - Consumes: `receipt_payload`, `Receipt`, `StoredQuote`, `MINT_A`
 - Produces: `CrashBeforeRename`, `commit_record(root: Path, relative: Path, payload: dict, *, crash: bool = False) -> None`, `discard_temps(root: Path) -> None`, `load_records(root: Path) -> tuple[list[Receipt], list[MarkRecord]]`, `receipt_path(signal_id: str, side: str) -> Path`, `mark_path(buy_id: str, n: int) -> Path`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_journal.py
@@ -1703,13 +1703,13 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 -m unittest tests.test_journal -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'executor.journal'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # executor/journal.py
@@ -1850,13 +1850,13 @@ def load_records(root: Path) -> tuple[list[Receipt], list[MarkRecord]]:
 
 `parse_pos` rejects `"0"`, so a missing parse becomes `0` and then `JournalError`. That is intentional.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m unittest tests.test_journal -v`
 
 Expected: PASS, `Ran 1 test`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add executor/journal.py tests/test_journal.py
@@ -1873,7 +1873,7 @@ git commit -m "feat: commit journal records with fsync and rename"
 - Consumes: `Book`, `MarkRecord`, `Receipt`, `StoredQuote`, `apply_observation`, `MINT_A`
 - Produces: `fold(starting_bank: int, receipts: list[Receipt], marks: list[MarkRecord]) -> Book`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_book.py
@@ -1929,13 +1929,13 @@ if __name__ == "__main__":
 
 The arm assertion uses entry `80_000_000 / 1000` and mark `120_000_000 / 1000`. `120_000_000 * 1000 * 100 >= 80_000_000 * 1000 * 112` is `12_000_000_000_000 >= 8_960_000_000_000`, so it arms. The high becomes the mark because `120_000_000 * 1000 > 80_000_000 * 1000`.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 -m unittest tests.test_book -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'executor.book'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # executor/book.py
@@ -1979,13 +1979,13 @@ def fold(starting_bank: int, receipts: list[Receipt], marks: list[MarkRecord]) -
     return Book(bank, positions)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m unittest tests.test_book -v`
 
 Expected: PASS, `Ran 1 test`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add executor/book.py tests/test_book.py
@@ -2002,7 +2002,7 @@ git commit -m "feat: fold the journal into a simulated book"
 - Consumes: nothing
 - Produces: `LockBusy`, `exclusive_lock(path: Path)` context manager. The second acquire raises `LockBusy` and does not replace the file.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_lock.py
@@ -2030,13 +2030,13 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 -m unittest tests.test_lock -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'executor.lock'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # executor/lock.py
@@ -2065,13 +2065,13 @@ def exclusive_lock(path: Path):
         handle.close()
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m unittest tests.test_lock -v`
 
 Expected: PASS, `Ran 1 test`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add executor/lock.py tests/test_lock.py
@@ -2104,7 +2104,7 @@ Behavior for this task:
 - `stop.is_set()` before each signal returns `0` without a new sell file.
 - `crash_commits` makes the next commit raise `CrashBeforeRename` after the temp file exists.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_run.py
@@ -2419,13 +2419,13 @@ if __name__ == "__main__":
 
 `0.01` SOL is `10_000_000` lamports. Three buys cost `30_015_000` lamports including fees, from a bank of `1_000_000_000`, so the first three pass the reserve. The fourth is rejected because three positions are already open. `MINT_DENIED` is absent from `sample_config` metadata, so it is `unknown_mint`. The bytes `AQID` must not appear in the journal.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 -m unittest tests.test_run -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'executor.run'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # executor/run.py
@@ -2564,13 +2564,13 @@ def _next_seq(receipts, marks) -> int:
 
 A schema rejection is journaled only when both `id` and `side` are known. Its `mint` is `SOL_MINT` because the signal did not prove a tradable mint. That value is not a quote and not a decimal guess. Invalid JSON and unsafe ids are logged and leave no journal file.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m unittest tests.test_run tests.test_schema tests.test_types -v`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add executor/run.py executor/types.py executor/schema.py tests/test_run.py
@@ -2587,7 +2587,7 @@ git commit -m "feat: run one dry-run pass over inbox copies"
 - Consumes: `decide_mark`, `mark_path`, `mark_payload`, `MarkRecord`, `QuoteRequest`, `QuoteSuccess`, `QuoteUnavailable`, `QuoteUnsafe`, `run`
 - Produces: the same `run`. After inbox signals, for each open position in mint order, it requests one sell-to-SOL quote of `token_base_units`. `stop` and `trailing` commit one sell receipt, id `rexit.<buy_id>.stop` or `rexit.<buy_id>.trailing`, `trigger` set, `reason` null, and no mark file. `observe` commits `journal/<buy_id>/marks/<n>.json` and no exit. `QuoteUnsafe` and `QuoteUnavailable` commit nothing for that mark.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_run.py`:
 
@@ -2710,13 +2710,13 @@ For the stop-wins case, use a new test method and a fresh directory from `setUp`
 
 The first `run` buys and marks `120000000`, which arms. The second `run` marks `94000000` and must choose stop, not trailing. An unsafe mark stores no bytes and does not block the next invocation's mark quote.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 -m unittest tests.test_run.RunTest.test_stop_commits_one_exit_and_no_mark_file -v`
 
 Expected: FAIL because no stop receipt exists.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Add these imports to `executor/run.py`: `decide_mark` from `executor.marks`, `mark_path` from `executor.journal`, `mark_payload` from `executor.records`, and `MarkRecord` from `executor.types`.
 
@@ -2788,13 +2788,13 @@ Mark commits pass `crash=False`. Exit commits use `_commit`, which owns the sign
         return 0
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m unittest tests.test_run -v`
 
 Expected: PASS, including the stop, arm, giveback, stop-wins, and unsafe-mark tests, plus the earlier signal tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add executor/run.py tests/test_run.py
@@ -2814,7 +2814,7 @@ git commit -m "feat: persist stop, trailing, and mark observations"
 
 `main` checks refusal before it reads the config, creates the state directory, or constructs `UrllibTransport`. Config errors return 3 and print `refused: config`. `LockBusy` returns 2. Missing `--config` or `--inbox` returns 1 and prints `usage`. `SIGTERM` sets the stop flag. The real transport is built only after refusal and config load, immediately before `run`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_cli.py
@@ -2968,13 +2968,13 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 -m unittest tests.test_cli -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'executor.cli'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # executor/cli.py
@@ -3039,13 +3039,13 @@ The subprocess `MODE=live` test passes `--config missing.json`. Refusal happens 
 
 The lock subprocess imports `executor.lock` while the parent project is the cwd. Good.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m unittest tests.test_cli tests.test_run tests.test_startup -v`
 
 Expected: PASS. The live subprocess exits 3. The locked subprocess exits 2. SIGTERM leaves no sell receipt.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add executor/cli.py executor/__main__.py tests/test_cli.py
@@ -3064,7 +3064,7 @@ git commit -m "feat: add the dry-run CLI and signal handling"
 
 `main` performs one GET, prints `router`, `inAmount`, `outAmount`, and `feeBps` separated by spaces, writes no file, and returns 1 on `QuoteUnavailable`, `QuoteUnsafe`, or a transport exception. The default suite never calls it.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_suite_scope.py
@@ -3089,13 +3089,13 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 -m unittest tests.test_suite_scope -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'executor.smoke'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # executor/smoke.py
@@ -3128,13 +3128,13 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m unittest discover -s tests -v`
 
 Expected: PASS for the whole default suite. The output does not run `executor.smoke.main`. No test opens a socket.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add executor/smoke.py tests/test_suite_scope.py
