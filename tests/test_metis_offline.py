@@ -44,10 +44,19 @@ class DecodeTest(unittest.TestCase):
             self.assertIn(report.reason, {"bad_base64", "truncated"})
             self.assertEqual(report.kind, "rejected")
 
-    def test_nonzero_signature_rejects(self):
+    def test_nonzero_signature_is_untrusted_and_still_rejected(self):
         report = evaluate(NONZERO_SIG_B64, intent())
-        self.assertEqual(report.reason, "signature_not_zero")
+        self.assertTrue(report.parsed)
         self.assertEqual(report.signatures_all_zero, False)
+        self.assertEqual(report.reason, "unknown_program")
+        self.assertEqual(report.kind, "rejected")
+        self.assertEqual(report.instruction_semantics, "unverified")
+        signed = bytearray(base64.b64decode(V0_B64))
+        signed[1] = 0x11
+        looked = evaluate(base64.b64encode(bytes(signed)).decode("ascii"), intent())
+        self.assertEqual(looked.signatures_all_zero, False)
+        self.assertEqual(looked.reason, "alt_missing")
+        self.assertEqual(looked.kind, "rejected")
 
     def test_legacy_parses_then_rejects_unknown_program(self):
         report = evaluate(LEGACY_B64, intent())
@@ -182,6 +191,10 @@ class DecodeTest(unittest.TestCase):
         self.assertNotIn("/execute", text)
         self.assertNotIn("/build", text)
         self.assertNotIn("solana_send", text)
+        self.assertNotIn("Keypair(", text)
+        self.assertNotIn("sign_message", text)
+        self.assertNotIn("send_transaction", text)
+        self.assertNotIn("socket.", text)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -259,6 +272,51 @@ class CliTest(unittest.TestCase):
         body = json.loads(proc.stdout)
         self.assertEqual(body["reason"], "unknown_program")
         self.assertIs(body["trade_authorized"], False)
+
+    def test_raw_base64_file_and_stdin_do_not_echo_or_authorize(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "synthetic.b64"
+            path.write_text(LEGACY_B64 + "\n", encoding="utf-8")
+            code, out, err = run_cli([str(path)])
+        self.assertEqual(code, 2)
+        self.assertEqual(err, "")
+        self.assertNotIn(LEGACY_B64, out)
+        body = json.loads(out)
+        self.assertIs(body["structural_decode"], True)
+        self.assertEqual(body["reason"], "unknown_program")
+        self.assertIs(body["signatures_all_zero"], True)
+        self.assertIs(body["signatures_authentic"], False)
+        self.assertIs(body["economics_verified"], False)
+        self.assertIs(body["trade_authorized"], False)
+        self.assertNotIn("amount", body)
+        signed = bytearray(base64.b64decode(LEGACY_B64))
+        signed[1] = 0x11
+        wire = base64.b64encode(bytes(signed)).decode("ascii")
+        code, out, err = run_cli(["-"], wire + "\n")
+        self.assertEqual(code, 2)
+        self.assertNotIn(wire, out)
+        body = json.loads(out)
+        self.assertIs(body["signatures_all_zero"], False)
+        self.assertIs(body["signatures_authentic"], False)
+        self.assertEqual(body["reason"], "unknown_program")
+        self.assertIs(body["trade_authorized"], False)
+
+    def test_empty_malformed_and_oversized_inputs_stay_distinct(self):
+        code, out, err = run_cli(["-"], "")
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        self.assertIn("empty input", err)
+        code, out, err = run_cli(["-"], "????")
+        self.assertEqual(code, 2)
+        self.assertEqual(json.loads(out)["reason"], "bad_base64")
+        self.assertEqual(err, "")
+        huge = "A" * 1_048_577
+        code, out, err = run_cli(["-"], huge)
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        self.assertIn("exceeds", err)
+        self.assertLess(len(err), 500)
+        self.assertNotIn(huge[:80], err)
 
 
 if __name__ == "__main__":

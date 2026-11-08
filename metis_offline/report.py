@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Intent:
-    user: bytes
+    user: bytes | None
     input_mint: bytes
     output_mint: bytes
     amount: int

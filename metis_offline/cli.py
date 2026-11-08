@@ -8,6 +8,7 @@ from metis_offline.report import DecodeReport, Intent
 EXIT_HELP = 0
 EXIT_FAILURE = 1
 EXIT_REJECTED = 2
+MAX_INPUT_CHARS = 1_048_576
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -15,7 +16,7 @@ def main(argv: list[str] | None = None) -> int:
         argv = sys.argv[1:]
     if argv == ["--help"] or argv == ["-h"]:
         print("usage: metis-offline [FILE|-]", file=sys.stdout)
-        print("Read one JSON request and print a rejected, unverified report.", file=sys.stdout)
+        print("Read a base64 transaction or a JSON request. The report is rejected and unverified.", file=sys.stdout)
         return EXIT_HELP
     if len(argv) > 1:
         print("usage: metis-offline [FILE|-]", file=sys.stderr)
@@ -44,6 +45,13 @@ def _read_input(argv: list[str]) -> str:
 
 
 def _parse_request(text: str) -> tuple[Intent, str]:
+    if len(text) > MAX_INPUT_CHARS:
+        raise ValueError(f"input exceeds {MAX_INPUT_CHARS} characters")
+    stripped = text.strip()
+    if stripped == "":
+        raise ValueError("empty input")
+    if not stripped.startswith("{"):
+        return Intent(None, b"", b"", 0, None, {}), "".join(stripped.split())
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
@@ -97,7 +105,9 @@ def _public_report(report: DecodeReport) -> dict:
         "kind": report.kind,
         "parsed": report.parsed,
         "reason": report.reason,
+        "economics_verified": False,
         "signatures_all_zero": report.signatures_all_zero,
+        "signatures_authentic": False,
         "structural_decode": report.parsed,
         "trade_authorized": False,
         "version": report.version,
