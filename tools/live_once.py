@@ -22,18 +22,22 @@ sys.path.insert(0, str(ROOT))
 from tools import jupiter_unsigned_build, sign_gate  # noqa: E402
 
 
-def main(argv: list[str]) -> int:
-    out_dir = Path(argv[argv.index("--out") + 1]) if "--out" in argv else Path("/tmp/jupiter-live-once")
+def run_once(out_dir: Path, *, build=None, gate=None) -> tuple[int, dict]:
+    """Build -> check -> simulate -> gate on OUT_DIR. Returns (exit code, result). Never signs or sends.
+
+    Exceptions from the build (network loss, RPC errors) propagate to the caller.
+    """
     import contextlib
     import io
 
+    build = build or jupiter_unsigned_build.main
+    gate = gate or sign_gate.run
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        build_code = jupiter_unsigned_build.main(["--out", str(out_dir)])
+        build_code = build(["--out", str(out_dir)])
     if build_code != 0:
-        print(json.dumps({"decision": "denied", "reason": "build_failed"}))
-        return 2
-    code, result = sign_gate.run(out_dir)
+        return 2, {"decision": "denied", "reason": "build_failed"}
+    code, result = gate(out_dir)
     out = {"decision": result["decision"], "reason": result["reason"]}
     if code == 0:
         out["unsigned_b64_path"] = str(out_dir / "unsigned.b64")
@@ -41,6 +45,12 @@ def main(argv: list[str]) -> int:
         out["ticket_path"] = str(sign_gate.STATE_DIR / "tickets" / f"{result['ticket']['ticket_id']}.json")
     else:
         out.update({k: v for k, v in result.items() if k not in out})
+    return code, out
+
+
+def main(argv: list[str]) -> int:
+    out_dir = Path(argv[argv.index("--out") + 1]) if "--out" in argv else Path("/tmp/jupiter-live-once")
+    code, out = run_once(out_dir)
     print(json.dumps(out, indent=2))
     return code
 
