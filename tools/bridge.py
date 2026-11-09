@@ -2,7 +2,7 @@
 
 usage: python3 tools/bridge.py (--signal FILE | --stdin) [--out DIR] [--fills-dir DIR]
                                [--max-age-s N] [--budget-s N] [--state-dir DIR] [--log-path FILE]
-                               [--turnkey-sign]
+                               [--turnkey-sign] [--wallet PROFILE]
 
 Consumes ONE memedesk signal (the JSON the scanner writes to
 /workspace/memedesk/live/signals/NNNN_buy.json or NNNN_sell.json), maps it to a
@@ -55,7 +55,7 @@ from metis_offline.preflight import (  # noqa: E402
     MAX_AMOUNT_LAMPORTS, MAX_PRIORITY_FEE_LAMPORTS, MAX_SLIPPAGE_BPS, WSOL, Intent, Reject, check_intent,
 )
 from tools import jupiter_unsigned_build as build_mod  # noqa: E402
-from tools import oplog  # noqa: E402
+from tools import oplog, wallet  # noqa: E402
 
 STATE_DIR = ROOT / "data" / "bridge"
 OUT_ROOT = Path("/tmp/turbo-juparzo-bridge")
@@ -63,7 +63,7 @@ MAX_SIGNAL_AGE_S = 600  # memedesk FILL_TIMEOUT / signal_ttl_seconds
 FUTURE_SKEW_S = 5
 DEFAULT_BUDGET_S = 90
 LAMPORTS_PER_SOL = 1_000_000_000
-USER = build_mod.USER
+USER = build_mod.USER  # default (phantom) profile address; Bridge uses its selected profile
 
 EXIT_READY, EXIT_USAGE, EXIT_STOPPED, EXIT_HALTED, EXIT_DUPLICATE = 0, 1, 2, 3, 4
 NETWORK_ERRORS = (urllib.error.URLError, TimeoutError, socket.timeout, ConnectionError)
@@ -141,10 +141,10 @@ def map_intent(sig: dict) -> dict:
             "max_priority_fee_lamports": MAX_PRIORITY_FEE_LAMPORTS}
 
 
-def check_supported(intent: dict) -> None:
+def check_supported(intent: dict, user: str = USER) -> None:
     """Reuse the preflight's own intent limits (pair, amount cap, slippage, fee), then the build's fixed intent."""
     try:
-        check_intent(Intent(pubkey(USER), pubkey(intent["input_mint"]), pubkey(intent["output_mint"]),
+        check_intent(Intent(pubkey(user), pubkey(intent["input_mint"]), pubkey(intent["output_mint"]),
                             intent["amount_raw"] if intent["amount_raw"] is not None else 0,
                             intent["slippage_bps"], intent["max_priority_fee_lamports"]))
     except Reject as exc:
@@ -157,21 +157,24 @@ def check_supported(intent: dict) -> None:
         raise Stop("pipeline_intent_mismatch", build_amount=build_mod.AMOUNT)
 
 
-def default_pipeline(out_dir: Path, intent: dict) -> tuple[int, dict]:
+def default_pipeline(out_dir: Path, intent: dict, wallet_profile: str | None = None) -> tuple[int, dict]:
     from tools import live_once
 
-    check_supported(intent)  # the build ignores the intent; refuse anything it would not build
-    return live_once.run_once(out_dir)
+    profile = wallet.load_profile(wallet_profile)
+    check_supported(intent, profile.address)  # the build ignores the intent; refuse anything it would not build
+    return live_once.run_once(out_dir, wallet_profile=profile.name)
 
 
 class Bridge:
     def __init__(self, *, state_dir: Path = STATE_DIR, log_path: Path | None = None, pipeline=default_pipeline,
                  clock=time.time, fills_dir: Path | None = None, out_root: Path = OUT_ROOT,
-                 max_age_s: float = MAX_SIGNAL_AGE_S, budget_s: float = DEFAULT_BUDGET_S, signer=None):
+                 max_age_s: float = MAX_SIGNAL_AGE_S, budget_s: float = DEFAULT_BUDGET_S, signer=None,
+                 wallet_profile: str | None = None):
         if not 0 < max_age_s <= MAX_SIGNAL_AGE_S:
             raise ValueError("max_age_s must be in (0, 600]")
         self.state_dir, self.log_path, self.pipeline, self.clock = Path(state_dir), log_path, pipeline, clock
         self.fills_dir, self.out_root, self.max_age_s, self.budget_s = fills_dir, Path(out_root), max_age_s, budget_s
+        self.wallet = wallet.load_profile(wallet_profile)
         self.signer = signer  # optional stage after ready_to_sign (tools/turnkey_signer.TurnkeySigner); off by default
 
     @property
@@ -254,13 +257,14 @@ class Bridge:
             started = self.clock()
             sig = parse_signal(signal, started, self.max_age_s)
             intent = map_intent(sig)
-            self._log("mapped", signal_key=key, intent=_public_intent(intent))
-            check_supported(intent)
+            self._log("mapped", signal_key=key, intent=_public_intent(intent), wallet_profile=self.wallet.name)
+            check_supported(intent, self.wallet.address)
             out_dir = self.out_root / key
             self._set_claim(key, "pipeline_running")
             self._log("pipeline_start", signal_key=key, out_dir=str(out_dir))
             try:
-                code, result = self.pipeline(out_dir, intent)
+                code, result = (default_pipeline(out_dir, intent, self.wallet.name) if self.pipeline is default_pipeline
+                                else self.pipeline(out_dir, intent))
             except Stop:
                 raise
             except NETWORK_ERRORS as exc:
@@ -285,7 +289,7 @@ class Bridge:
         handoff = {
             "status": "ready_to_sign", "signal_key": key, "signal": _brief(signal), "intent": _public_intent(intent),
             "ticket": dict(ticket), "unsigned_b64_path": result.get("unsigned_b64_path"),
-            "signer": USER, "sign_before": ticket.get("expires_at"),
+            "signer": self.wallet.address, "wallet_profile": self.wallet.name, "signer_kind": self.wallet.signer, "sign_before": ticket.get("expires_at"),
             "next": "agent only: Phantom embedded-wallet signing of unsigned_b64_path before sign_before, then "
                     "tools/record_result.py SIGNATURE --ticket <ticket_path>; the bridge never signs or sends",
             "ticket_path": result.get("ticket_path"),
@@ -344,7 +348,7 @@ def main(argv: list[str], stdin=None) -> int:
         state_dir = opt("--state-dir", Path, STATE_DIR)
         kwargs = {"state_dir": state_dir, "log_path": opt("--log-path", Path), "fills_dir": opt("--fills-dir", Path),
                   "out_root": opt("--out", Path, OUT_ROOT), "max_age_s": opt("--max-age-s", float, MAX_SIGNAL_AGE_S),
-                  "budget_s": opt("--budget-s", float, DEFAULT_BUDGET_S)}
+                  "budget_s": opt("--budget-s", float, DEFAULT_BUDGET_S), "wallet_profile": opt("--wallet")}
         if ("--signal" in argv) == ("--stdin" in argv):
             raise ValueError("exactly one of --signal/--stdin")
         text = opt("--signal", Path).read_text(encoding="utf-8") if "--signal" in argv else (stdin or sys.stdin).read()
@@ -357,7 +361,7 @@ def main(argv: list[str], stdin=None) -> int:
                 print(f"turnkey signer unavailable: {exc}", file=sys.stderr)
                 return EXIT_USAGE
         bridge = Bridge(**kwargs)
-    except (ValueError, OSError) as exc:
+    except (ValueError, OSError) as exc:  # includes wallet.WalletConfigError
         print(f"usage error: {type(exc).__name__}", file=sys.stderr)
         print(USAGE, file=sys.stderr)
         return EXIT_USAGE

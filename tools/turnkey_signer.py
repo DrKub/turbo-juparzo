@@ -14,7 +14,8 @@ Preconditions, all fail closed (bridge stop rule; network loss -> KILL):
     (O_EXCL marker) and matches the handoff; now < expires_at_epoch (20 s TTL);
  5. single use: data/turnkey-signer/used/<ticket_id> created with O_EXCL;
  6. sha256(unsigned.b64) == ticket.unsigned_sha256 and sha256(message) == ticket.message_sha256;
- 7. fee payer == TURNKEY_SIGN_WITH;
+ 7. the handoff's wallet_profile is "turnkey" (config/wallet.json) and fee payer ==
+    TURNKEY_SIGN_WITH == that profile's address (9Ao3...);
  8. local caps: SOL spent by the tx (top-level System transfers from the payer and
     Jupiter route_v2 in_amount) <= per_trade_max_lamports, and today's (Kyiv)
     reserved total + this <= daily_max_lamports. The daily reservation is written
@@ -49,7 +50,7 @@ sys.path.insert(0, str(ROOT))
 from metis_offline.base58 import b58encode, pubkey  # noqa: E402
 from metis_offline.preflight import JUPITER, MAX_AMOUNT_LAMPORTS, ROUTE_V2, SYSTEM  # noqa: E402
 from metis_offline.wire import WireError, parse_transaction  # noqa: E402
-from tools import oplog, sign_gate  # noqa: E402
+from tools import oplog, sign_gate, wallet  # noqa: E402
 from tools.bridge import STATE_DIR as BRIDGE_STATE_DIR, Stop  # noqa: E402
 
 CONFIG_PATH = ROOT / "config" / "turnkey" / "signer.json"
@@ -199,10 +200,13 @@ def _ed25519_ok(public: bytes, signature: bytes, message: bytes) -> bool:
 class TurnkeySigner:
     def __init__(self, config: dict, credentials: Credentials, transport, *, stamper=p256_stamp, clock=time.time,
                  state_dir: Path = STATE_DIR, kill_file: Path = BRIDGE_STATE_DIR / "KILL", gate_state_dir: Path = sign_gate.STATE_DIR,
-                 log_path: Path | None = None, sig_verify=_ed25519_ok):
+                 log_path: Path | None = None, sig_verify=_ed25519_ok, wallet_path: Path = wallet.CONFIG_PATH):
         self.config, self.creds, self.transport, self.stamper, self.clock = config, credentials, transport, stamper, clock
         self.state_dir, self.kill_file, self.gate_state_dir, self.log_path = Path(state_dir), Path(kill_file), Path(gate_state_dir), log_path
         self.sig_verify = sig_verify
+        self.profile = wallet.load_profile("turnkey", path=wallet_path)
+        if self.creds.sign_with != self.profile.address:
+            raise ConfigError("sign_with_not_turnkey_profile")
 
     @classmethod
     def from_environment(cls, config_path: Path = CONFIG_PATH, env=os.environ, **kwargs) -> "TurnkeySigner":
@@ -272,6 +276,8 @@ class TurnkeySigner:
             raise Stop("signer_disabled")
         if self.config.get("broadcast") is not False:
             raise Stop("broadcast_not_implemented")
+        if handoff.get("wallet_profile") != "turnkey" or handoff.get("signer") != self.profile.address:
+            raise Stop("wallet_profile_not_turnkey", wallet_profile=handoff.get("wallet_profile"))
         ticket = self._ticket(handoff)
         sha = ticket["message_sha256"]
         if self.clock() >= ticket["expires_at_epoch"]:
@@ -291,7 +297,7 @@ class TurnkeySigner:
         if hashlib.sha256(tx.message).hexdigest() != sha:
             raise Stop("message_hash_mismatch", message_sha256=sha)
         payer = tx.account_keys[0]
-        if b58encode(payer) != self.creds.sign_with:
+        if b58encode(payer) != self.creds.sign_with or b58encode(payer) != self.profile.address:
             raise Stop("fee_payer_mismatch", message_sha256=sha, fee_payer=b58encode(payer))
         spend = tx_spend_lamports(tx, payer)
         if spend <= 0 or spend > self.config["per_trade_max_lamports"]:

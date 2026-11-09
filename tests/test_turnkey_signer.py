@@ -15,7 +15,9 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from metis_offline import fixtures as fx
 from metis_offline.base58 import b58encode
 from metis_offline.wire import parse_transaction, serialize
-from tools import bridge, oplog, turnkey_signer as ts
+from metis_offline.pda import associated_token_address
+from metis_offline.preflight import ATA, TOKEN, USDC, WSOL
+from tools import bridge, oplog, turnkey_signer as ts, wallet
 
 NOW = 1_800_000_000.0
 # Documented vector: docs.turnkey.com/developer-reference/api-overview/stamps (`turnkey request --no-post`).
@@ -82,6 +84,16 @@ class SignerTest(unittest.TestCase):
     def clock(self):
         return self.now[0]
 
+    def wallet_file(self) -> Path:
+        """A wallet.json whose 'turnkey' profile is the test key (the real file pins 9Ao3, whose key we do not hold)."""
+        path = self.dir / "wallet.json"
+        if not path.exists():
+            addr = b58encode(WALLET_PUB)
+            ata = lambda mint: b58encode(associated_token_address(WALLET_PUB, mint, TOKEN, ATA))  # noqa: E731
+            path.write_text(json.dumps({"default_profile": "turnkey", "profiles": {"turnkey": {
+                "address": addr, "signer": "turnkey", "wsol_ata": ata(WSOL), "usdc_ata": ata(USDC)}}}))
+        return path
+
     def handoff(self, payer=WALLET_PUB, lamports=fx.AMOUNT, ticket_id="t1", expires=NOW + 20, write_gate=True):
         raw = case_for(payer, lamports).raw()
         wire = base64.b64encode(raw).decode()
@@ -94,12 +106,14 @@ class SignerTest(unittest.TestCase):
         if write_gate:
             (self.gate / "consumed").mkdir(parents=True, exist_ok=True)
             (self.gate / "consumed" / sha).write_text(json.dumps(ticket))
-        return {"status": "ready_to_sign", "ticket": dict(ticket), "unsigned_b64_path": str(build / "unsigned.b64")}
+        return {"status": "ready_to_sign", "ticket": dict(ticket), "unsigned_b64_path": str(build / "unsigned.b64"),
+                "wallet_profile": "turnkey", "signer": b58encode(WALLET_PUB)}
 
     def signer(self, transport=None, cfg=None, **kw):
         self.transport = transport or FakeTransport()
         return ts.TurnkeySigner(cfg or config(), kw.pop("creds", None) or creds(), self.transport, clock=self.clock,
-                                state_dir=self.dir / "tk", kill_file=self.dir / "KILL", gate_state_dir=self.gate, log_path=self.log, **kw)
+                                state_dir=self.dir / "tk", kill_file=self.dir / "KILL", gate_state_dir=self.gate, log_path=self.log,
+                                wallet_path=kw.pop("wallet_path", None) or self.wallet_file(), **kw)
 
     def stop_reason(self, signer, handoff):
         with self.assertRaises(bridge.Stop) as ctx:
@@ -144,7 +158,7 @@ class SignerTest(unittest.TestCase):
     # --- ticket --------------------------------------------------------------
     def test_ticket_required_expired_reused_and_forged(self):
         s = self.signer()
-        self.assertEqual(self.stop_reason(s, {"ticket": {}}).reason, "ticket_missing")
+        self.assertEqual(self.stop_reason(s, {"ticket": {}, "wallet_profile": "turnkey", "signer": b58encode(WALLET_PUB)}).reason, "ticket_missing")
         self.assertEqual(self.stop_reason(s, self.handoff(ticket_id="nogate", write_gate=False)).reason, "ticket_not_issued_by_gate")
         h = self.handoff(ticket_id="exp", expires=NOW - 1)
         self.assertEqual(self.stop_reason(s, h).reason, "ticket_expired")
@@ -247,6 +261,25 @@ class SignerTest(unittest.TestCase):
             return raw[:-1] + bytes([raw[-1] ^ 1])
         stop = self.stop_reason(self.signer(FakeTransport(tamper=flip_last_byte), cfg=cfg), self.handoff(ticket_id="s2"))
         self.assertIn(stop.reason, ("signed_message_mismatch", "signed_unparseable"))
+
+    def test_requires_turnkey_profile_handoff(self):
+        s = self.signer()
+        h = self.handoff()
+        h["wallet_profile"] = "phantom"
+        self.assertEqual(self.stop_reason(s, h).reason, "wallet_profile_not_turnkey")
+        h = self.handoff(ticket_id="t2")
+        h["signer"] = "8Xm6iFvk9J8rBi7BvRAbiZU2RAEE1b7AM714QmiEXQ8a"
+        self.assertEqual(self.stop_reason(s, h).reason, "wallet_profile_not_turnkey")
+        self.assertEqual(self.transport.calls, [])
+
+    def test_sign_with_must_equal_turnkey_profile(self):
+        with self.assertRaisesRegex(ts.ConfigError, "sign_with_not_turnkey_profile"):
+            self.signer(creds=creds(sign_with="8Xm6iFvk9J8rBi7BvRAbiZU2RAEE1b7AM714QmiEXQ8a"))
+        with self.assertRaisesRegex(ts.ConfigError, "sign_with_not_turnkey_profile"):  # real config pins 9Ao3
+            self.signer(wallet_path=wallet.CONFIG_PATH)
+        repo = ts.TurnkeySigner(config(), creds(sign_with="9Ao3ggbuUaiWPzYKr4VdsNQ9LMzM6MPmraZRVv4gv1UW"), FakeTransport(),
+                                state_dir=self.dir / "tk2", kill_file=self.dir / "KILL", gate_state_dir=self.gate)
+        self.assertEqual(repo.profile.address, "9Ao3ggbuUaiWPzYKr4VdsNQ9LMzM6MPmraZRVv4gv1UW")
 
     def test_expiry_rechecked_after_stamping(self):
         def slow_stamper(body, pub, priv):

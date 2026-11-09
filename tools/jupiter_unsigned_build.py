@@ -5,7 +5,10 @@ READ_ONLY_METHODS; anything else raises. Transaction bytes and the request
 document are written under OUT_DIR (default /tmp/jupiter-unsigned) and must
 never be committed. Prints a JSON summary without transaction bytes.
 
-Usage: python3 tools/jupiter_unsigned_build.py [--out DIR] [--no-log]
+Usage: python3 tools/jupiter_unsigned_build.py [--out DIR] [--wallet PROFILE] [--no-log]
+
+The user (fee payer) comes from config/wallet.json (tools/wallet.py): --wallet,
+else env TURBO_WALLET, else the default profile (phantom, 8Xm6...).
 
 By default build / check / simulate entries are appended to logs/operations.jsonl.
 """
@@ -28,10 +31,10 @@ from metis_offline.base58 import b58decode, b58encode, pubkey  # noqa: E402
 from metis_offline.pda import associated_token_address  # noqa: E402
 from metis_offline.preflight import ATA, MAX_AMOUNT_LAMPORTS, MAX_PRIORITY_FEE_LAMPORTS, MAX_SLIPPAGE_BPS, SYSTEM, TOKEN, USDC, WSOL  # noqa: E402
 from metis_offline.wire import parse_transaction  # noqa: E402
-from tools import oplog  # noqa: E402
+from tools import oplog, wallet  # noqa: E402
 from tools.readonly_rpc import READ_ONLY_METHODS, http_json, rpc  # noqa: E402,F401
 
-USER = "8Xm6iFvk9J8rBi7BvRAbiZU2RAEE1b7AM714QmiEXQ8a"
+USER = wallet.load_profile("phantom").address  # backwards-compatible default; main() uses the selected profile
 INPUT_MINT = "So11111111111111111111111111111111111111112"
 OUTPUT_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 AMOUNT = MAX_AMOUNT_LAMPORTS
@@ -55,7 +58,9 @@ def token_amount(account: dict | None) -> int | None:
 def main(argv: list[str]) -> int:
     out_dir = Path(argv[argv.index("--out") + 1]) if "--out" in argv else Path("/tmp/jupiter-unsigned")
     out_dir.mkdir(parents=True, exist_ok=True)
-    summary: dict = {"started_at": now()}
+    profile = wallet.load_profile(argv[argv.index("--wallet") + 1] if "--wallet" in argv else None)
+    user_address = profile.address
+    summary: dict = {"started_at": now(), "wallet_profile": profile.name, "user": user_address}
 
     query = {
         "inputMint": INPUT_MINT, "outputMint": OUTPUT_MINT, "amount": str(AMOUNT), "slippageBps": str(SLIPPAGE_BPS),
@@ -72,7 +77,7 @@ def main(argv: list[str]) -> int:
         "instruction_version": quote.get("instructionVersion"),
     }
     build = http_json(f"{JUP}/swap", {
-        "quoteResponse": quote, "userPublicKey": USER, "wrapAndUnwrapSol": True, "dynamicComputeUnitLimit": True,
+        "quoteResponse": quote, "userPublicKey": user_address, "wrapAndUnwrapSol": True, "dynamicComputeUnitLimit": True,
         "prioritizationFeeLamports": {"priorityLevelWithMaxLamports": {"maxLamports": MAX_PRIORITY_FEE_LAMPORTS, "priorityLevel": "medium"}},
     })
     wire_b64 = build["swapTransaction"]
@@ -95,16 +100,16 @@ def main(argv: list[str]) -> int:
             raise RuntimeError("lookup table account not found")
         tables.append({"address": b58encode(lookup.table), "owner": value["owner"], "data_b64": value["data"][0], "context_slot": info["context"]["slot"]})
 
-    user = pubkey(USER)
+    user = pubkey(user_address)
     wsol_ata = b58encode(associated_token_address(user, WSOL, TOKEN, ATA))
     usdc_ata = b58encode(associated_token_address(user, USDC, TOKEN, ATA))
-    watch = [USER, wsol_ata, usdc_ata]
+    watch = [user_address, wsol_ata, usdc_ata]
     pre = rpc("getMultipleAccounts", [watch, {"encoding": "base64", "commitment": "confirmed"}])["value"]
 
     height = rpc("getBlockHeight", [{"commitment": "confirmed"}])
     request = {
         "transaction_b64": wire_b64,
-        "intent": {"user": USER, "input_mint": INPUT_MINT, "output_mint": OUTPUT_MINT, "amount": AMOUNT,
+        "intent": {"user": user_address, "input_mint": INPUT_MINT, "output_mint": OUTPUT_MINT, "amount": AMOUNT,
                    "slippage_bps": SLIPPAGE_BPS, "max_priority_fee_lamports": MAX_PRIORITY_FEE_LAMPORTS},
         "lookup_tables": tables,
         "freshness": {"blockhash": b58encode(tx.recent_blockhash), "last_valid_block_height": last_valid, "current_block_height": height},

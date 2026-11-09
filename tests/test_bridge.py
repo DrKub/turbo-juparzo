@@ -298,8 +298,12 @@ class BridgeTest(unittest.TestCase):
 class LiveOnceRunOnceTest(unittest.TestCase):
     def test_run_once_uses_injected_build_and_gate(self):
         out = Path("/nonexistent-dir")
-        code, res = live_once.run_once(out, build=lambda argv: 0, gate=lambda d: (2, {"decision": "denied", "reason": "x", "k": 1}))
-        self.assertEqual((code, res), (2, {"decision": "denied", "reason": "x", "k": 1}))
+        seen = []
+        code, res = live_once.run_once(out, build=lambda argv: seen.append(argv) or 0,
+                                       gate=lambda d: (2, {"decision": "denied", "reason": "x", "k": 1}))
+        self.assertEqual((code, res), (2, {"decision": "denied", "reason": "x", "k": 1, "wallet_profile": "phantom",
+                                           "user": "8Xm6iFvk9J8rBi7BvRAbiZU2RAEE1b7AM714QmiEXQ8a"}))
+        self.assertEqual(seen[0][-2:], ["--wallet", "phantom"])
         code, res = live_once.run_once(out, build=lambda argv: 1, gate=None)
         self.assertEqual((code, res["reason"]), (2, "build_failed"))
         ticket = {"ticket_id": "t1"}

@@ -6,6 +6,8 @@ read-only simulation of the exact same message. This gate re-verifies all of
 that from the build directory and issues a short-lived, single-use ticket.
 
 Rules, checked in this order (any failure -> denied, exit 2, logged):
+ 0. Optional expected_user (wallet profile): request intent user and fee payer
+    must both equal it (wallet_mismatch).
  1. summary.json, unsigned.b64 and metis-request.json exist and parse
     (build_files_missing / unsigned_unparseable / request_unparseable).
  2. metis-request.json carries exactly the bytes in unsigned.b64 (request_wire_mismatch).
@@ -85,10 +87,15 @@ def _load(build_dir: Path):
 
 
 def evaluate(build_dir: Path, *, rpc=default_rpc, now=time.time, state_dir: Path = STATE_DIR,
-             max_age_s: int = MAX_AGE_S, min_blocks: int = MIN_BLOCKS) -> dict:
+             max_age_s: int = MAX_AGE_S, min_blocks: int = MIN_BLOCKS, expected_user: str | None = None) -> dict:
     """Return a ticket dict or raise Denied. Consumes the message on approval."""
     summary, wire_b64, raw, tx, intent, evidence = _load(Path(build_dir))
     message_sha = hashlib.sha256(tx.message).hexdigest()
+    if expected_user is not None:
+        from metis_offline.base58 import pubkey as _pubkey
+
+        if intent.user != _pubkey(expected_user) or tx.account_keys[0] != intent.user:
+            raise Denied("wallet_mismatch", message_sha256=message_sha)
     metis = summary.get("metis_offline") or {}
     report = metis.get("report") or {}
     if metis.get("exit") != 0 or report.get("kind") != "semantic_pass" or report.get("reason") != "ok_unsigned" or report.get("trade_authorized") is not False:

@@ -36,6 +36,6 @@ The API key is a P-256 private key in env on this box. Whoever reads it can subm
 ## Integration plan
 1. Owner creates the Turnkey org (root = owner passkey), a Solana wallet, a non-root API user + P-256 key.
 2. Fill placeholders in `config/turnkey/policies.json` (user id, signer address, its WSOL/USDC ATAs), owner uploads them.
-3. Parameterise the build/check for the Turnkey address (today `USER` = 8Xm6 is hardcoded, so every ticket is refused with `fee_payer_mismatch`).
+3. Done 2026-11-09: wallet is configurable (`config/wallet.json`, `tools/wallet.py`; `--wallet` or env `TURBO_WALLET`; default `phantom` = 8Xm6). Profile `turnkey` = 9Ao3ggbuUaiWPzYKr4VdsNQ9LMzM6MPmraZRVv4gv1UW, WSOL ATA 2cvHExWS1E1EPgTrNnfxo3eAtFepfZ8cBZW2xamSoYPM, USDC ATA 3hQu4N3TECymZCPeZeq7X1vMkic8APDJvjnpUouAaFqZ. The signer requires a `turnkey` handoff and fee payer 9Ao3. Unsigned dry run with `--wallet turnkey`: build + metis-offline ok_unsigned; simulation `AccountNotFound` because 9Ao3 is unfunded (expected); gate denied `simulation_error`.
 4. Fund a small float; set env; flip `enabled`; choose transport `https`.
 5. Broadcast remains unimplemented; a separate, explicitly approved step would add it.

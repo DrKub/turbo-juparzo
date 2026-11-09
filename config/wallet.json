@@ -1,0 +1,18 @@
+{
+  "_comment": "Single source for the signing wallet. Select with env TURBO_WALLET=<profile> or --wallet <profile>; default_profile applies otherwise. ATAs are recomputed at load and must match. 9Ao3 verified 2026-11-09: base58 -> 32 bytes, on the ed25519 curve; account did not exist on-chain (0 SOL) at slot 467312403.",
+  "default_profile": "phantom",
+  "profiles": {
+    "phantom": {
+      "address": "8Xm6iFvk9J8rBi7BvRAbiZU2RAEE1b7AM714QmiEXQ8a",
+      "signer": "phantom_embedded",
+      "wsol_ata": "9VBttMqv8sQRaLhrPp8aBxS7WpjF2bEBKViheGgmxSkG",
+      "usdc_ata": "4E1xT2iA5EkrVGzrNyLcFfy9G9GJtamg63bSbodQDxce"
+    },
+    "turnkey": {
+      "address": "9Ao3ggbuUaiWPzYKr4VdsNQ9LMzM6MPmraZRVv4gv1UW",
+      "signer": "turnkey",
+      "wsol_ata": "2cvHExWS1E1EPgTrNnfxo3eAtFepfZ8cBZW2xamSoYPM",
+      "usdc_ata": "3hQu4N3TECymZCPeZeq7X1vMkic8APDJvjnpUouAaFqZ"
+    }
+  }
+}

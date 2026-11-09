@@ -1,6 +1,6 @@
 """One-shot, no-pause pipeline: build -> check -> simulate -> gate. Never signs or sends.
 
-usage: python3 tools/live_once.py [--out DIR]
+usage: python3 tools/live_once.py [--out DIR] [--wallet PROFILE]
 
 Runs tools/jupiter_unsigned_build.py (fresh quote/build, lookup tables,
 ./metis-offline, read-only simulation; logs build/check/simulate) and then
@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT))
 from tools import jupiter_unsigned_build, sign_gate  # noqa: E402
 
 
-def run_once(out_dir: Path, *, build=None, gate=None) -> tuple[int, dict]:
+def run_once(out_dir: Path, *, build=None, gate=None, wallet_profile: str | None = None) -> tuple[int, dict]:
     """Build -> check -> simulate -> gate on OUT_DIR. Returns (exit code, result). Never signs or sends.
 
     Exceptions from the build (network loss, RPC errors) propagate to the caller.
@@ -30,15 +30,18 @@ def run_once(out_dir: Path, *, build=None, gate=None) -> tuple[int, dict]:
     import contextlib
     import io
 
+    from tools import wallet
+
+    profile = wallet.load_profile(wallet_profile)
     build = build or jupiter_unsigned_build.main
-    gate = gate or sign_gate.run
+    gate = gate or (lambda d: sign_gate.run(d, expected_user=profile.address))
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        build_code = build(["--out", str(out_dir)])
+        build_code = build(["--out", str(out_dir), "--wallet", profile.name])
     if build_code != 0:
         return 2, {"decision": "denied", "reason": "build_failed"}
     code, result = gate(out_dir)
-    out = {"decision": result["decision"], "reason": result["reason"]}
+    out = {"decision": result["decision"], "reason": result["reason"], "wallet_profile": profile.name, "user": profile.address}
     if code == 0:
         out["unsigned_b64_path"] = str(out_dir / "unsigned.b64")
         out["ticket"] = result["ticket"]
@@ -50,7 +53,7 @@ def run_once(out_dir: Path, *, build=None, gate=None) -> tuple[int, dict]:
 
 def main(argv: list[str]) -> int:
     out_dir = Path(argv[argv.index("--out") + 1]) if "--out" in argv else Path("/tmp/jupiter-live-once")
-    code, out = run_once(out_dir)
+    code, out = run_once(out_dir, wallet_profile=argv[argv.index("--wallet") + 1] if "--wallet" in argv else None)
     print(json.dumps(out, indent=2))
     return code
 
