@@ -7,3 +7,4 @@ __pycache__/
 *.b64
 metis-request*.json
 data/sign-gate/
+data/bridge/
