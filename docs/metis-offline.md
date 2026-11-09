@@ -62,3 +62,7 @@ A previous multi-hop route (SOL -> USDT -> USDC) created the user's USDT ATA and
 ## Fresh unsigned build helper
 
 `python3 tools/jupiter_unsigned_build.py [--out DIR]` (network, read-only): quote + build from `lite-api.jup.ag/swap/v1` (direct route, V2 instruction, 0.001 SOL, 50 bps, priority `maxLamports` 10,000), lookup tables via `getAccountInfo`, block height, runs `./metis-offline`, then `simulateTransaction` with `sigVerify:false, replaceRecentBlockhash:false`, and re-checks block height and `isBlockhashValid`. It refuses any RPC method outside a read-only allowlist and writes bytes only under `/tmp/jupiter-unsigned` by default. It never signs or sends.
+
+### Venue restriction
+
+The unsigned build helper passes `dexes=Meteora DLMM` to the Jupiter quote so the direct route uses a venue on the preflight AMM allowlist. Without it, Jupiter returned direct routes via Kipseli and 1DEX, which the preflight correctly rejected with `unsupported_amm`.

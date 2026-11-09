@@ -32,6 +32,7 @@ OUTPUT_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 AMOUNT = MAX_AMOUNT_LAMPORTS
 SLIPPAGE_BPS = MAX_SLIPPAGE_BPS
 JUP = "https://lite-api.jup.ag/swap/v1"
+DEXES = "Meteora DLMM"
 RPC = "https://api.mainnet-beta.solana.com"
 KYIV = ZoneInfo("Europe/Kyiv")
 READ_ONLY_METHODS = {"getAccountInfo", "getMultipleAccounts", "getBlockHeight", "isBlockhashValid", "simulateTransaction", "getMinimumBalanceForRentExemption"}
@@ -72,6 +73,8 @@ def main(argv: list[str]) -> int:
     query = {
         "inputMint": INPUT_MINT, "outputMint": OUTPUT_MINT, "amount": str(AMOUNT), "slippageBps": str(SLIPPAGE_BPS),
         "onlyDirectRoutes": "true", "instructionVersion": "V2", "swapMode": "ExactIn",
+        # Restrict the venue to Meteora DLMM so the quote matches the preflight AMM allowlist.
+        "dexes": DEXES,
     }
     quote = http_json(f"{JUP}/quote?{urllib.parse.urlencode(query)}")
     summary["quote"] = {
