@@ -16,6 +16,19 @@ from executor.run import StopFlag
 from tests.fixtures import MINT_A, sample_config
 
 
+def _scrubbed_env() -> dict:
+    """Host env without live/secret-looking names, so this test checks the lock and not
+    the startup refusal (which correctly fires when the host exports such names)."""
+    from executor.startup import find_startup_refusal
+
+    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin")}
+    for key in ("HOME", "LANG", "PYTHONPATH", "SYSTEMROOT", "TMPDIR"):
+        if key in os.environ:
+            env[key] = os.environ[key]
+    assert find_startup_refusal([], env) is None
+    return env
+
+
 class CliTest(unittest.TestCase):
     def test_live_refusal_creates_no_state_and_hides_the_secret(self):
         tmp = tempfile.TemporaryDirectory()
@@ -91,6 +104,7 @@ class CliTest(unittest.TestCase):
                 text=True,
                 timeout=5,
                 cwd=Path(__file__).resolve().parents[1],
+                env=_scrubbed_env(),
             )
         finally:
             held.send_signal(signal.SIGTERM)
