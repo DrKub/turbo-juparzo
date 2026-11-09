@@ -66,3 +66,35 @@ A previous multi-hop route (SOL -> USDT -> USDC) created the user's USDT ATA and
 ### Venue restriction
 
 The unsigned build helper passes `dexes=Meteora DLMM` to the Jupiter quote so the direct route uses a venue on the preflight AMM allowlist. Without it, Jupiter returned direct routes via Kipseli and 1DEX, which the preflight correctly rejected with `unsupported_amm`.
+
+## Live flow and sign gate
+
+Hard rule: a transaction is signed and sent only **immediately** after a successful semantic check **and** a successful read-only simulation of the exact same message, with no pause or manual step in between. The signer (Phantom embedded wallet via Phantom MCP) is driven by the assistant, not by this repository, so the repository enforces the rule with a fail-closed gate. Nothing in this repository holds keys, signs, or sends; `tools/readonly_rpc.py` refuses every RPC method outside its read-only allowlist (`sendTransaction`, `sendRawTransaction`, `requestAirdrop` are refused).
+
+Flow:
+
+1. `python3 tools/live_once.py [--out DIR]` runs, with no pause: fresh direct-route build (`tools/jupiter_unsigned_build.py`) -> `./metis-offline` -> read-only simulation -> `tools/sign_gate.py`. Exit 0 prints `unsigned_b64_path`, the ticket and `ticket_path`; exit 2 prints the denial reason.
+2. Only on exit 0, and before `ticket.expires_at`, the external signer signs and sends exactly the bytes in `unsigned_b64_path`.
+3. `python3 tools/record_result.py SIGNATURE --ticket TICKET_PATH` fetches `getTransaction` read-only and logs the signature and the on-chain result, including whether the on-chain message sha256 equals the ticket's and whether it landed within the ticket TTL.
+
+`python3 tools/sign_gate.py BUILD_DIR` can also be run on its own. Gate rules, in order; any failure denies (exit 2) and is logged:
+
+1. `summary.json`, `unsigned.b64`, `metis-request.json` exist and parse.
+2. The request carries exactly the bytes in `unsigned.b64`.
+3. Saved check: metis exit 0, `semantic_pass`, `ok_unsigned`, `trade_authorized` false.
+4. `message_sha256` recomputed from `unsigned.b64` equals the check's and the simulation's (the simulation ran on the same message).
+5. Simulation `err` null, no persistent account created, WSOL ATA closed, USDC delta >= `min_out_amount_floor`.
+6. Summary age <= 30 s.
+7. `last_valid_block_height` in the request equals the build's.
+8. Fresh `getBlockHeight`: at least 20 blocks of margin before `last_valid_block_height`.
+9. The preflight is re-run in-process with that fresh height and passes again.
+10. `isBlockhashValid` is true.
+11. Single use: a consume marker `data/sign-gate/consumed/<message_sha256>` is created exclusively; a second approval of the same message is `ticket_reused`.
+
+An approval issues a ticket valid for 20 s (`ticket_id`, `message_sha256`, `unsigned_sha256`, `blockhash`, `last_valid_block_height`, `blocks_left`, `issued_at`, `expires_at`). Gate state lives in `data/sign-gate/` (git-ignored).
+
+## Operation log
+
+`logs/operations.jsonl` is append-only, one JSON object per line, committed to git: `ts` (Europe/Kyiv), `op` (`build`, `check`, `simulate`, `gate`, `sign`, `result`, `note`), `message_sha256`, `backfilled`, `data`. The build helper writes build/check/simulate entries, the gate writes every decision, and `record_result.py` writes sign and result entries (slot, block time, err, fee, compute units, signer SOL delta, signer token deltas by mint).
+
+`tools/oplog.py` refuses to write an entry containing raw transaction bytes or secrets: keys such as `transaction_b64`, `swapTransaction`, `data_b64`, `wire`, `raw`, any secret-named key, raw `bytes`, or any string longer than 100 characters made only of base64/base58 characters. Public keys, signatures and hashes are allowed. The first entries backfill the 2026-11-09 12:50 Kyiv live test (signature `57QRfRyxVsjfWhpvwfLXPteaoW9qunAGK1x9B1m991t6Rr8odyyRJDx8pCu8GcYQNWfe5ok3u7juPcWMeJa9svuS`) and are marked `backfilled`.
