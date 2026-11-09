@@ -6,3 +6,4 @@ __pycache__/
 /tmp/
 *.b64
 metis-request*.json
+data/sign-gate/

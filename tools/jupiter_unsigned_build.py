@@ -5,16 +5,19 @@ READ_ONLY_METHODS; anything else raises. Transaction bytes and the request
 document are written under OUT_DIR (default /tmp/jupiter-unsigned) and must
 never be committed. Prints a JSON summary without transaction bytes.
 
-Usage: python3 tools/jupiter_unsigned_build.py [--out DIR]
+Usage: python3 tools/jupiter_unsigned_build.py [--out DIR] [--no-log]
+
+By default build / check / simulate entries are appended to logs/operations.jsonl.
 """
 
 import base64
+import hashlib
 import datetime as dt
 import json
 import subprocess
 import sys
+import time
 import urllib.parse
-import urllib.request
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -25,6 +28,8 @@ from metis_offline.base58 import b58decode, b58encode, pubkey  # noqa: E402
 from metis_offline.pda import associated_token_address  # noqa: E402
 from metis_offline.preflight import ATA, MAX_AMOUNT_LAMPORTS, MAX_PRIORITY_FEE_LAMPORTS, MAX_SLIPPAGE_BPS, SYSTEM, TOKEN, USDC, WSOL  # noqa: E402
 from metis_offline.wire import parse_transaction  # noqa: E402
+from tools import oplog  # noqa: E402
+from tools.readonly_rpc import READ_ONLY_METHODS, http_json, rpc  # noqa: E402,F401
 
 USER = "8Xm6iFvk9J8rBi7BvRAbiZU2RAEE1b7AM714QmiEXQ8a"
 INPUT_MINT = "So11111111111111111111111111111111111111112"
@@ -33,29 +38,11 @@ AMOUNT = MAX_AMOUNT_LAMPORTS
 SLIPPAGE_BPS = MAX_SLIPPAGE_BPS
 JUP = "https://lite-api.jup.ag/swap/v1"
 DEXES = "Meteora DLMM"
-RPC = "https://api.mainnet-beta.solana.com"
 KYIV = ZoneInfo("Europe/Kyiv")
-READ_ONLY_METHODS = {"getAccountInfo", "getMultipleAccounts", "getBlockHeight", "isBlockhashValid", "simulateTransaction", "getMinimumBalanceForRentExemption"}
 
 
 def now() -> str:
     return dt.datetime.now(KYIV).isoformat(timespec="seconds")
-
-
-def http_json(url: str, body: dict | None = None) -> dict:
-    data = None if body is None else json.dumps(body).encode()
-    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json", "User-Agent": "turbo-juparzo-preflight"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode())
-
-
-def rpc(method: str, params: list):
-    if method not in READ_ONLY_METHODS:
-        raise RuntimeError(f"refusing non-read-only RPC method {method}")
-    out = http_json(RPC, {"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
-    if "error" in out:
-        raise RuntimeError(f"{method}: {out['error']}")
-    return out["result"]
 
 
 def token_amount(account: dict | None) -> int | None:
@@ -92,6 +79,7 @@ def main(argv: list[str]) -> int:
     (out_dir / "unsigned.b64").write_text(wire_b64 + "\n", encoding="utf-8")
     raw = base64.b64decode(wire_b64)
     tx = parse_transaction(raw)
+    message_sha = hashlib.sha256(tx.message).hexdigest()
     last_valid = build["lastValidBlockHeight"]
     summary["build"] = {
         "at": now(), "last_valid_block_height": last_valid, "jupiter_reported_priority_lamports": build.get("prioritizationFeeLamports"),
@@ -158,7 +146,7 @@ def main(argv: list[str]) -> int:
     post_lamports = [a["lamports"] if a else 0 for a in post]
     usdc_pre, usdc_post = token_amount(pre[2]), token_amount(post[2])
     summary["simulation"] = {
-        "at": now(), "slot": sim["context"]["slot"], "err": value.get("err"), "units_consumed": value.get("unitsConsumed"),
+        "at": now(), "message_sha256": message_sha, "slot": sim["context"]["slot"], "err": value.get("err"), "units_consumed": value.get("unitsConsumed"),
         "logs_tail": (value.get("logs") or [])[-4:], "inner_program_counts": inner_programs,
         "accounts_created_inside_tx": created,
         "wsol_ata": wsol_ata, "wsol_ata_exists_before": pre[1] is not None, "wsol_ata_exists_after": bool(post[1] and post[1]["lamports"]),
@@ -174,7 +162,10 @@ def main(argv: list[str]) -> int:
                                 "blocks_left": last_valid - end_height, "isBlockhashValid": valid}
     summary["rent_165_bytes"] = rpc("getMinimumBalanceForRentExemption", [165])
     summary["finished_at"] = now()
+    summary["finished_at_epoch"] = time.time()
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    if "--no-log" not in argv:
+        oplog.log_build_summary(summary)
     print(json.dumps(summary, indent=2))
     return 0
 
