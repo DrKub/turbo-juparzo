@@ -1,0 +1,46 @@
+{
+  "_comment": [
+    "Turnkey policy set for the turbo-juparzo API user. NOT uploaded anywhere. Placeholders in <...> must be filled at setup:",
+    "<API_USER_ID> = the NON-ROOT Turnkey user that owns the P-256 API key on disk; <TK_SIGNER> = the Turnkey Solana wallet account address;",
+    "<TK_WSOL_ATA> / <TK_USDC_ATA> = associated token accounts of <TK_SIGNER> for WSOL / USDC (derive offline with metis_offline.pda).",
+    "Evaluation (docs.turnkey.com/concepts/policies/overview): root quorum bypasses all policies; any matching DENY wins; else any matching ALLOW; else implicit DENY.",
+    "A policy whose condition hits an evaluation error is SKIPPED: an erroring ALLOW allows nothing, an erroring DENY denies nothing (docs.turnkey.com/concepts/policies/language#evaluation-errors-and-short-circuiting). The ALLOW policies below are therefore the real protection; the DENY policies are a belt only.",
+    "&& and || do not short-circuit and have equal precedence: every mixed expression is parenthesised.",
+    "Shapes checked offline against two real unsigned Jupiter builds from this repo (SOL->USDC, v0, 1 ALT): outer programs ComputeBudget, ATA, System, Token, Jupiter are all static keys; the System transfer payer->WSOL ATA and Jupiter accounts[0..2] (authority, WSOL ATA, USDC ATA) are static; mints and the AMM come from the ALT.",
+    "NOT enforceable by Turnkey: daily/cumulative spend (no such field), the swap's quoted/min output, V0 priority fee (priority_fee_lamports is V1-only), sell-side token amounts inside Jupiter CPIs. Those are local checks (metis-offline + sign gate + tools/turnkey_signer.py)."
+  ],
+  "policies": [
+    {
+      "policyName": "turbo-juparzo: allow bounded Jupiter SOL->USDC swap",
+      "notes": "One System transfer <= 1000000 lamports into the signer's WSOL ATA; only ComputeBudget/System/Token/ATA/Jupiter programs; exactly one Jupiter route_v2 instruction whose authority/source/destination are the signer, its WSOL ATA and its USDC ATA; no SPL transfers.",
+      "effect": "EFFECT_ALLOW",
+      "consensus": "approvers.any(user, user.id == '<API_USER_ID>')",
+      "condition": "activity.type == 'ACTIVITY_TYPE_SIGN_TRANSACTION_V2' && wallet_account.address == '<TK_SIGNER>' && solana.tx.version == 'V0' && solana.tx.program_keys.all(p, p in ['ComputeBudget111111111111111111111111111111', '11111111111111111111111111111111', 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL', 'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4']) && solana.tx.instructions.count() <= 8 && solana.tx.spl_transfers.count() == 0 && solana.tx.transfers.count() == 1 && solana.tx.transfers.all(t, t.from == '<TK_SIGNER>' && t.to == '<TK_WSOL_ATA>' && t.amount > 0 && t.amount <= 1000000) && solana.tx.instructions.filter(i, i.program_key == 'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4').count() == 1 && solana.tx.instructions.filter(i, i.program_key == 'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4').all(i, i.instruction_data_hex[0..16] == 'bb64facc31c4af14' && i.accounts[0].account_key == '<TK_SIGNER>' && i.accounts[1].account_key == '<TK_WSOL_ATA>' && i.accounts[2].account_key == '<TK_USDC_ATA>')"
+    },
+    {
+      "policyName": "turbo-juparzo: allow SOL withdrawal only to 3YxV",
+      "notes": "Plain System transfer(s) from the signer to the owner's address 3YxVKCTSZUvQGFPL51dzXPoFj82k4v4NJC6cSxDuyqwx only; no lookup tables; no other programs except ComputeBudget. SPL withdrawals are not allowed by this set.",
+      "effect": "EFFECT_ALLOW",
+      "consensus": "approvers.any(user, user.id == '<API_USER_ID>')",
+      "condition": "activity.type == 'ACTIVITY_TYPE_SIGN_TRANSACTION_V2' && wallet_account.address == '<TK_SIGNER>' && (solana.tx.version == 'LEGACY' || solana.tx.version == 'V0') && solana.tx.address_table_lookups.count() == 0 && solana.tx.program_keys.all(p, p in ['11111111111111111111111111111111', 'ComputeBudget111111111111111111111111111111']) && solana.tx.spl_transfers.count() == 0 && solana.tx.transfers.count() >= 1 && solana.tx.transfers.all(t, t.from == '<TK_SIGNER>' && t.to == '3YxVKCTSZUvQGFPL51dzXPoFj82k4v4NJC6cSxDuyqwx')"
+    },
+    {
+      "policyName": "turbo-juparzo: deny SOL transfers to any other destination",
+      "notes": "Belt only (an erroring DENY is skipped). Destinations other than the signer's WSOL ATA and 3YxV, including lookup-table placeholders.",
+      "effect": "EFFECT_DENY",
+      "condition": "solana.tx.transfers.any(t, t.to != '<TK_WSOL_ATA>' && t.to != '3YxVKCTSZUvQGFPL51dzXPoFj82k4v4NJC6cSxDuyqwx')"
+    },
+    {
+      "policyName": "turbo-juparzo: deny SPL transfers",
+      "notes": "Belt only. Top-level SPL Transfer/TransferChecked/TransferCheckedWithFee are never needed by the swap.",
+      "effect": "EFFECT_DENY",
+      "condition": "solana.tx.spl_transfers.count() > 0"
+    },
+    {
+      "policyName": "turbo-juparzo: deny Solana V1 transactions",
+      "notes": "The allow policies are written for LEGACY/V0 only.",
+      "effect": "EFFECT_DENY",
+      "condition": "solana.tx.version == 'V1'"
+    }
+  ]
+}

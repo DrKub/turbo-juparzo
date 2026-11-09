@@ -251,12 +251,22 @@ class ReadOnlyRpcTest(unittest.TestCase):
                 readonly_rpc.rpc(method, [])
 
     def test_tools_never_sign_or_send(self):
+        """No tool signs or sends, with ONE named exception: tools/turnkey_signer.py may request a
+        Turnkey signature (disabled by default) but must never broadcast."""
         root = Path(__file__).resolve().parents[1] / "tools"
+        signer_exception = "turnkey_signer.py"
         for path in root.glob("*.py"):
             text = path.read_text(encoding="utf-8")
-            for needle in ("solana_send", "Keypair", "sign_message", "signTransaction", "/execute"):
+            needles = ["solana_send", "Keypair", "sign_message", "/execute"]
+            if path.name != signer_exception:
+                needles.append("signTransaction")
+            for needle in needles:
                 self.assertNotIn(needle, text, str(path))
             self.assertNotIn('"sendTransaction"', text.replace('rpc("sendTransaction"', ""), str(path))
+        signer = (root / signer_exception).read_text(encoding="utf-8")
+        for needle in ("sendTransaction", "sendRawTransaction", "broadcast_svm", "BROADCAST", "sol_send", "/submit/send", "readonly_rpc"):
+            self.assertNotIn(needle, signer)
+        self.assertEqual(re.findall(r"/public/v1/[a-z_/]+", signer), ["/public/v1/submit/sign_transaction"])
 
 
 if __name__ == "__main__":

@@ -1,0 +1,10 @@
+{
+  "_comment": "Local Turnkey signer settings. DISABLED by default. Credentials come only from env: TURNKEY_API_PUBLIC_KEY, TURNKEY_API_PRIVATE_KEY, TURNKEY_ORG_ID, TURNKEY_SIGN_WITH. per_trade and daily caps are enforced LOCALLY by tools/turnkey_signer.py; Turnkey policies (policies.json) enforce the per-transaction cap and program/destination allowlists server-side; Turnkey has no native daily/cumulative limit for signing.",
+  "enabled": false,
+  "api_base": "https://api.turnkey.com",
+  "transport": "none",
+  "broadcast": false,
+  "per_trade_max_lamports": 1000000,
+  "daily_max_lamports": 5000000,
+  "request_timeout_s": 10
+}

@@ -8,3 +8,4 @@ __pycache__/
 metis-request*.json
 data/sign-gate/
 data/bridge/
+data/turnkey-signer/

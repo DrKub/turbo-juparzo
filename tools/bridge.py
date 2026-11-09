@@ -2,6 +2,7 @@
 
 usage: python3 tools/bridge.py (--signal FILE | --stdin) [--out DIR] [--fills-dir DIR]
                                [--max-age-s N] [--budget-s N] [--state-dir DIR] [--log-path FILE]
+                               [--turnkey-sign]
 
 Consumes ONE memedesk signal (the JSON the scanner writes to
 /workspace/memedesk/live/signals/NNNN_buy.json or NNNN_sell.json), maps it to a
@@ -11,6 +12,9 @@ produces is a `ready_to_sign` handoff file with the gate ticket under
 STATE_DIR/ready/. Signing is NOT here: only the agent can ask the Phantom
 embedded wallet to sign, and it must do so before ticket.expires_at
 (sign gate TTL 20 s), then run tools/record_result.py --ticket.
+Optional --turnkey-sign: after ready_to_sign, hand the ticket to
+tools/turnkey_signer.py (disabled unless config/turnkey/signer.json enables it
+and TURNKEY_* env is set). It signs through Turnkey and never broadcasts.
 
 Stop rule (no retry, ever, for a given signal):
 - each signal is claimed once by an O_EXCL file STATE_DIR/claims/<key>.json,
@@ -163,11 +167,12 @@ def default_pipeline(out_dir: Path, intent: dict) -> tuple[int, dict]:
 class Bridge:
     def __init__(self, *, state_dir: Path = STATE_DIR, log_path: Path | None = None, pipeline=default_pipeline,
                  clock=time.time, fills_dir: Path | None = None, out_root: Path = OUT_ROOT,
-                 max_age_s: float = MAX_SIGNAL_AGE_S, budget_s: float = DEFAULT_BUDGET_S):
+                 max_age_s: float = MAX_SIGNAL_AGE_S, budget_s: float = DEFAULT_BUDGET_S, signer=None):
         if not 0 < max_age_s <= MAX_SIGNAL_AGE_S:
             raise ValueError("max_age_s must be in (0, 600]")
         self.state_dir, self.log_path, self.pipeline, self.clock = Path(state_dir), log_path, pipeline, clock
         self.fills_dir, self.out_root, self.max_age_s, self.budget_s = fills_dir, Path(out_root), max_age_s, budget_s
+        self.signer = signer  # optional stage after ready_to_sign (tools/turnkey_signer.TurnkeySigner); off by default
 
     @property
     def kill_file(self) -> Path:
@@ -289,8 +294,20 @@ class Bridge:
         self._set_claim(key, "ready_to_sign", ticket_id=ticket.get("ticket_id"))
         self._log("ready_to_sign", signal_key=key, ticket_id=ticket.get("ticket_id"), message_sha256=ticket.get("message_sha256"),
                   expires_at=ticket.get("expires_at"), handoff=str(path))
-        return EXIT_READY, {"status": "ready_to_sign", "signal_key": key, "handoff": str(path), "ticket_id": ticket.get("ticket_id"),
-                            "sign_before": ticket.get("expires_at"), "exit_code": EXIT_READY}
+        ready = {"status": "ready_to_sign", "signal_key": key, "handoff": str(path), "ticket_id": ticket.get("ticket_id"),
+                 "sign_before": ticket.get("expires_at"), "exit_code": EXIT_READY}
+        if self.signer is None:
+            return EXIT_READY, ready
+        try:
+            signed = self.signer(handoff)
+        except Stop as exc:
+            return self._stop(key, signal, exc, claimed=True)
+        except Exception as exc:  # noqa: BLE001 - fail closed
+            return self._stop(key, signal, Stop("signer_exception", halt=True, error_type=type(exc).__name__), claimed=True)
+        self._set_claim(key, "signed_not_broadcast", signature=signed.get("signature"))
+        self._log("signed_not_broadcast", signal_key=key, ticket_id=ticket.get("ticket_id"), signature=signed.get("signature"),
+                  message_sha256=ticket.get("message_sha256"), broadcast=False)
+        return EXIT_READY, {**ready, "status": "signed_not_broadcast", "signature": signed.get("signature"), "signed_path": signed.get("signed_path")}
 
 
 def _brief(signal) -> dict:
@@ -331,6 +348,14 @@ def main(argv: list[str], stdin=None) -> int:
         if ("--signal" in argv) == ("--stdin" in argv):
             raise ValueError("exactly one of --signal/--stdin")
         text = opt("--signal", Path).read_text(encoding="utf-8") if "--signal" in argv else (stdin or sys.stdin).read()
+        if "--turnkey-sign" in argv:
+            from tools.turnkey_signer import ConfigError, TurnkeySigner
+
+            try:
+                kwargs["signer"] = TurnkeySigner.from_environment(kill_file=Path(state_dir) / "KILL", log_path=kwargs["log_path"])
+            except ConfigError as exc:
+                print(f"turnkey signer unavailable: {exc}", file=sys.stderr)
+                return EXIT_USAGE
         bridge = Bridge(**kwargs)
     except (ValueError, OSError) as exc:
         print(f"usage error: {type(exc).__name__}", file=sys.stderr)
