@@ -5,23 +5,27 @@ sign/send only immediately after a successful semantic check AND a successful
 read-only simulation of the exact same message. This gate re-verifies all of
 that from the build directory and issues a short-lived, single-use ticket.
 
-Rules (any failure -> denied, exit 2, logged):
- 1. summary.json, unsigned.b64 and metis-request.json exist and parse.
- 2. metis-request.json carries exactly the bytes in unsigned.b64.
+Rules, checked in this order (any failure -> denied, exit 2, logged):
+ 1. summary.json, unsigned.b64 and metis-request.json exist and parse
+    (build_files_missing / unsigned_unparseable / request_unparseable).
+ 2. metis-request.json carries exactly the bytes in unsigned.b64 (request_wire_mismatch).
  3. Saved metis result: exit 0, kind semantic_pass, reason ok_unsigned,
-    trade_authorized false.
- 4. The preflight is re-run in-process now, with the block height re-queried,
-    and must pass again (semantic_pass, ok_unsigned).
- 5. message_sha256 recomputed from unsigned.b64 == saved metis
-    message_sha256 == simulation.message_sha256 (simulation bound to the same
-    message).
- 6. Simulation: err null, no persistent account created, WSOL ATA gone after,
-    USDC raw delta >= min_out_amount_floor from the check.
- 7. Summary age (now - finished_at_epoch) <= MAX_AGE_S (30 s).
- 8. Fresh read-only getBlockHeight: last_valid_block_height - height >=
-    MIN_BLOCKS (20), and isBlockhashValid is true.
- 9. Single use: a consume marker data/sign-gate/consumed/<message_sha256> is
-    created with O_EXCL; if it already exists the gate denies ticket_reused.
+    trade_authorized false (metis_not_passed).
+ 4. message_sha256 recomputed from unsigned.b64 == saved check message_sha256
+    (message_sha_mismatch_check) == simulation.message_sha256
+    (message_sha_mismatch_simulation): the simulation ran on the same message.
+ 5. Simulation err null (simulation_error); no persistent account created and
+    WSOL ATA gone after (simulation_accounts); USDC raw delta >= the check's
+    min_out_amount_floor (simulation_output_below_min).
+ 6. Summary age (now - finished_at_epoch) <= MAX_AGE_S = 30 s (summary_too_old).
+ 7. last_valid_block_height in the request == the build's (last_valid_mismatch).
+ 8. Fresh read-only getBlockHeight: last_valid - height >= MIN_BLOCKS = 20
+    (block_margin_low).
+ 9. The preflight is re-run in-process with that fresh height and must pass
+    again on the same message (preflight_rerun_failed).
+10. isBlockhashValid is true (blockhash_invalid).
+11. Single use: data/sign-gate/consumed/<message_sha256> is created with
+    O_EXCL; if it already exists -> ticket_reused.
 Approved -> ticket JSON (ticket_id, message_sha256, unsigned_sha256, blockhash,
 last_valid_block_height, blocks_left, issued_at, expires_at = +TICKET_TTL_S)
 printed and saved, exit 0.

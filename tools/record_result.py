@@ -78,10 +78,11 @@ def summarize(result: dict, signer: str, ticket: dict | None = None) -> tuple[di
 
 
 def record(signature: str, *, ticket: dict | None = None, signer: str = DEFAULT_SIGNER, mechanism: str = "Phantom embedded wallet via Phantom MCP, driven by the assistant outside the repo",
-           backfilled: bool = False, rpc=default_rpc, log_path: Path | None = None, sleep=time.sleep) -> dict:
+           backfilled: bool = False, rpc=default_rpc, log_path: Path | None = None, sleep=time.sleep, signed_at: str | None = None) -> dict:
     sha_hint = ticket.get("message_sha256") if ticket else None
-    oplog.append("sign", {"signature": signature, "signer": signer, "mechanism": mechanism, "ticket_id": ticket.get("ticket_id") if ticket else None},
-                 sha_hint, backfilled, path=log_path)
+    oplog.append("sign", {"signature": signature, "signer": signer, "mechanism": mechanism, "ticket_id": ticket.get("ticket_id") if ticket else None,
+                         "signed_at_source": "given" if signed_at else "recorded_at"},
+                 sha_hint, backfilled, ts=signed_at, path=log_path)
     result = fetch(signature, rpc=rpc, sleep=sleep)
     if result is None:
         data = {"signature": signature, "status": "not_found"}
