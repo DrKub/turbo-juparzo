@@ -86,7 +86,7 @@ Flow:
 5. Simulation `err` null, no persistent account created, WSOL ATA closed, USDC delta >= `min_out_amount_floor`.
 6. Summary age <= 30 s.
 7. `last_valid_block_height` in the request equals the build's.
-8. Fresh `getBlockHeight`: at least 20 blocks of margin before `last_valid_block_height`.
+8. Fresh `getBlockHeight`: at least 45 blocks of margin before `last_valid_block_height`.
 9. The preflight is re-run in-process with that fresh height and passes again.
 10. `isBlockhashValid` is true.
 11. Single use: a consume marker `data/sign-gate/consumed/<message_sha256>` is created exclusively; a second approval of the same message is `ticket_reused`.

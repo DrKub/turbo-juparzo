@@ -129,8 +129,8 @@ class GateTest(unittest.TestCase):
 
     def test_low_block_margin(self):
         write_build(self.build)
-        self.assertDenied("block_margin_low", rpc=FakeRpc(height=981))
-        code, _ = self.gate(rpc=FakeRpc(height=980))
+        self.assertDenied("block_margin_low", rpc=FakeRpc(height=956))
+        code, _ = self.gate(rpc=FakeRpc(height=955))
         self.assertEqual(code, 0)
 
     def test_expired_blockhash_fails_rerun_or_validity(self):

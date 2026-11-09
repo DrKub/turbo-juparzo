@@ -19,7 +19,7 @@ Rules, checked in this order (any failure -> denied, exit 2, logged):
     min_out_amount_floor (simulation_output_below_min).
  6. Summary age (now - finished_at_epoch) <= MAX_AGE_S = 30 s (summary_too_old).
  7. last_valid_block_height in the request == the build's (last_valid_mismatch).
- 8. Fresh read-only getBlockHeight: last_valid - height >= MIN_BLOCKS = 20
+ 8. Fresh read-only getBlockHeight: last_valid - height >= MIN_BLOCKS = 45
     (block_margin_low).
  9. The preflight is re-run in-process with that fresh height and must pass
     again on the same message (preflight_rerun_failed).
@@ -51,7 +51,7 @@ from tools import oplog  # noqa: E402
 from tools.readonly_rpc import rpc as default_rpc  # noqa: E402
 
 MAX_AGE_S = 30
-MIN_BLOCKS = 20
+MIN_BLOCKS = 45
 TICKET_TTL_S = 20
 STATE_DIR = ROOT / "data" / "sign-gate"
 
