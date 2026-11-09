@@ -471,6 +471,22 @@ class HygieneTest(unittest.TestCase):
         for needle in ("urlopen", "solders", "socket", "solana_send", "Keypair(", "sign_message", "send_transaction", "sendTransaction", "/execute"):
             self.assertNotIn(needle, text)
 
+    def test_build_helper_is_read_only(self):
+        text = (ROOT / "tools" / "jupiter_unsigned_build.py").read_text(encoding="utf-8")
+        for needle in ("sendTransaction", "sendRawTransaction", "requestAirdrop", "solana_send", "Keypair", "/execute", "private"):
+            self.assertNotIn(needle, text)
+        self.assertIn('"replaceRecentBlockhash": False', text)
+        self.assertIn('"sigVerify": False', text)
+        self.assertIn('"onlyDirectRoutes": "true"', text)
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("jub", ROOT / "tools" / "jupiter_unsigned_build.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertNotIn("sendTransaction", module.READ_ONLY_METHODS)
+        with self.assertRaises(RuntimeError):
+            module.rpc("sendTransaction", [])
+
     def test_repo_has_no_solders_dependency(self):
         import re
 
