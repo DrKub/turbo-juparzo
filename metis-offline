@@ -1,0 +1,12 @@
+#!/bin/sh
+# Offline Metis preflight. Standard-library Python only: no venv, no third-party packages,
+# no network, no signing. Uses the system python3.
+set -eu
+ROOT=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+PY=${METIS_PYTHON:-python3}
+if ! command -v "$PY" >/dev/null 2>&1; then
+  echo "metis-offline: python3 not found on PATH (set METIS_PYTHON to override)" >&2
+  echo "This launcher does not install packages and does not contact the network." >&2
+  exit 1
+fi
+PYTHONPATH="$ROOT" exec "$PY" -m metis_offline "$@"
