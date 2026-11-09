@@ -1,6 +1,6 @@
 """Synthetic, stdlib-only fixtures for the offline preflight.
 
-The user key, pool, AMM program and blockhash are repeated byte patterns, not
+The user key, pool, table and blockhash are repeated byte patterns, not
 wallets or accounts on any network. Program ids and mints are the real public
 ids so the allowlist is exercised. Signatures are zero, so nothing here is
 broadcastable.
@@ -10,7 +10,7 @@ import base64
 from dataclasses import dataclass, field, replace
 
 from metis_offline.alt import ALT_PROGRAM, MAX_U64
-from metis_offline.base58 import b58encode
+from metis_offline.base58 import b58encode, pubkey
 from metis_offline.pda import associated_token_address
 from metis_offline.preflight import (
     ATA,
@@ -31,7 +31,7 @@ from metis_offline.wire import CompiledInstruction, Lookup, Transaction, seriali
 
 USER = bytes([1]) * 32
 POOL = bytes([2]) * 32
-AMM_PROGRAM = bytes([3]) * 32
+AMM_PROGRAM = pubkey("whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc")  # real public program id
 TABLE = bytes([4]) * 32
 BLOCKHASH = bytes([9]) * 32
 WSOL_ATA = associated_token_address(USER, WSOL, TOKEN, ATA)

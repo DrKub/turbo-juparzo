@@ -175,10 +175,13 @@ class FeeTest(unittest.TestCase):
         case.intent = replace(case.intent, max_priority_fee_lamports=20_000)
         self.assertEqual(run(case).reason, "priority_fee_over_limit")
 
-    def test_missing_or_duplicate_price(self):
+    def test_absent_price_is_zero_priority_and_duplicate_is_rejected(self):
         case = fx.Case()
         del case.instructions[1]
-        self.assertEqual(run(case).reason, "missing_compute_unit_price")
+        report = run(case)
+        self.assertEqual(report.reason, "ok_unsigned")
+        self.assertEqual(report.details["fees"]["priority_fee_lamports"], 0)
+        self.assertEqual(report.details["fees"]["compute_unit_price_source"], "absent")
         case = fx.Case()
         case.instructions.insert(0, fx.cu_price_ix(1))
         self.assertEqual(run(case).reason, "duplicate_compute_budget")
@@ -268,6 +271,17 @@ class SwapRejectTest(unittest.TestCase):
         accounts[2] = fx.I_POOL
         with_ix(case, index_of(case, fx.I_JUP), fx.route_ix(accounts=tuple(accounts)))
         self.assertEqual(run(case).reason, "route_accounts")
+
+    def test_user_authority_in_hop_accounts_is_allowed(self):
+        case = fx.Case()
+        accounts = fx.route_ix().accounts + (fx.I_USER,)
+        with_ix(case, index_of(case, fx.I_JUP), fx.route_ix(accounts=accounts))
+        self.assertEqual(run(case).reason, "ok_unsigned")
+
+    def test_unknown_amm_program_is_rejected(self):
+        case = fx.Case()
+        case.tables = [replace(case.tables[0], data=fx.table_data(addresses=[fx.POOL, WSOL, USDC, bytes([3]) * 32]))]
+        self.assertEqual(run(case).reason, "unsupported_amm")
 
     def test_wrong_pair(self):
         case = fx.Case()

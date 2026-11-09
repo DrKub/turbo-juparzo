@@ -29,6 +29,19 @@ JUPITER = pubkey("JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4")
 JUPITER_EVENT_AUTHORITY = pubkey("D8cy77BBepLMngZx6ZukaTff5hCt1HrWyKk3Hnd9oitf")
 ALT_PROGRAM = pubkey("AddressLookupTab1e1111111111111111111111111")
 
+# AMM programs accepted as the single direct hop. The hop's CPI data is not
+# decoded offline; the program must at least be one of these known venues.
+AMM_PROGRAMS = {
+    pubkey("whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"): "Orca Whirlpool",
+    pubkey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"): "Raydium CLMM",
+    pubkey("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"): "Raydium AMM v4",
+    pubkey("CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C"): "Raydium CPMM",
+    pubkey("LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo"): "Meteora DLMM",
+    pubkey("PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY"): "Phoenix",
+    pubkey("BiSoNHVpsVZW2F7rx2eQ59yQwKxzU5NvBcmKshCSUypi"): "BisonFi",
+    pubkey("MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms"): "Manifest",
+}
+
 # Anchor discriminator sha256("global:route_v2")[:8].
 ROUTE_V2 = bytes([187, 100, 250, 204, 49, 196, 175, 20])
 ROUTE_V2_FIXED = 34  # disc 8 + in 8 + quoted out 8 + slippage 2 + platform fee 2 + positive slippage 2 + vec len 4
@@ -250,8 +263,8 @@ def check_semantics(tx: Transaction, full: list[bytes], writable: set[int], inte
         else:
             raise Reject("unknown_program")
 
-    if cu_price is None:
-        raise Reject("missing_compute_unit_price")
+    price_source = "explicit" if cu_price is not None else "absent"
+    cu_price = cu_price or 0
     for name, value in (("transfer", transfers), ("sync", sync), ("route", route), ("close", close)):
         if value is None:
             raise Reject(f"missing_{name}")
@@ -275,6 +288,7 @@ def check_semantics(tx: Transaction, full: list[bytes], writable: set[int], inte
         "fees": {
             "base_fee_lamports": base,
             "compute_unit_price_micro_lamports": cu_price,
+            "compute_unit_price_source": price_source,
             "compute_unit_limit": limit,
             "compute_unit_limit_source": limit_source,
             "priority_fee_lamports": priority,
@@ -328,8 +342,9 @@ def _check_route_v2(data, accounts, indexes, writable, intent, wsol_ata, usdc_at
         raise Reject("route_accounts")
     if indexes[1] not in writable or indexes[2] not in writable:
         raise Reject("route_accounts")
-    if intent.user in accounts[10:]:
-        raise Reject("route_accounts")
+    venues = sorted({AMM_PROGRAMS[a] for a in accounts[10:] if a in AMM_PROGRAMS})
+    if len(venues) != 1:
+        raise Reject("unsupported_amm")
     min_out = quoted_out * (10_000 - slippage) // 10_000
     return {
         "instruction": "route_v2",
@@ -340,6 +355,8 @@ def _check_route_v2(data, accounts, indexes, writable, intent, wsol_ata, usdc_at
         "platform_fee_bps": platform_fee,
         "route_steps": steps,
         "direct_route": True,
+        "amm_program": venues[0],
+        "amm_cpi_data_decoded": False,
         "input_mint": b58encode(src_mint),
         "output_mint": b58encode(dst_mint),
     }
