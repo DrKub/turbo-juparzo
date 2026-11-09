@@ -1,16 +1,12 @@
 #!/bin/sh
-# Select the prepared offline interpreter. Do not install packages or use system Python.
+# Offline Metis preflight. Standard-library Python only: no venv, no third-party packages,
+# no network, no signing. Uses the system python3.
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
-PY="$ROOT/.venv-metis-offline/bin/python"
-if [ ! -x "$PY" ]; then
-  echo "metis-offline: prepared interpreter not found: $PY" >&2
+PY=${METIS_PYTHON:-python3}
+if ! command -v "$PY" >/dev/null 2>&1; then
+  echo "metis-offline: python3 not found on PATH (set METIS_PYTHON to override)" >&2
   echo "This launcher does not install packages and does not contact the network." >&2
-  echo "From the repository root, create the isolated environment once:" >&2
-  echo "  python3 -m venv .venv-metis-offline" >&2
-  echo "  .venv-metis-offline/bin/pip install --no-index --find-links WHEELHOUSE -r requirements-metis-offline.txt" >&2
-  echo "requirements-metis-offline.txt pins solders==0.29.0, jsonalias==0.1.1, and typing-extensions==4.16.0." >&2
-  echo "If you have no local wheelhouse, install that requirements file into .venv-metis-offline as a separate prerequisite. Then run ./metis-offline again." >&2
   exit 1
 fi
 PYTHONPATH="$ROOT" exec "$PY" -m metis_offline "$@"

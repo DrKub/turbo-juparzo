@@ -1,28 +1,5 @@
-from dataclasses import dataclass
+"""Compatibility re-exports; the report type lives in metis_offline.preflight."""
 
+from metis_offline.preflight import Intent, Report
 
-@dataclass(frozen=True)
-class Intent:
-    user: bytes | None
-    input_mint: bytes
-    output_mint: bytes
-    amount: int
-    slippage_bps: int | None
-    captured_tables: dict[bytes, bytes]
-
-
-@dataclass(frozen=True)
-class DecodeReport:
-    parsed: bool
-    version: str | None
-    reason: str
-    fee_payer: bytes | None
-    signatures_all_zero: bool | None
-
-    @property
-    def kind(self) -> str:
-        return "rejected"
-
-    @property
-    def instruction_semantics(self) -> str:
-        return "unverified"
+__all__ = ["Intent", "Report"]

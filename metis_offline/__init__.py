@@ -1,4 +1,1 @@
-from metis_offline.decode import evaluate
-from metis_offline.report import DecodeReport, Intent
-
-__all__ = ["DecodeReport", "Intent", "evaluate"]
+"""Offline, stdlib-only preflight for one unsigned Jupiter SOL to USDC transaction."""
