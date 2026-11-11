@@ -350,7 +350,7 @@ class BridgeSignerStageTest(unittest.TestCase):
             self.assertIn(policy["effect"], ("EFFECT_ALLOW", "EFFECT_DENY"))
             names.add(policy["policyName"])
             if policy["effect"] == "EFFECT_ALLOW":
-                self.assertIn("<API_USER_ID>", policy["consensus"])
+                self.assertIn("user.id == '021e6666-6d79-4ef4-9e8e-eca37248d92b'", policy["consensus"])
                 self.assertIn("activity.type == 'ACTIVITY_TYPE_SIGN_TRANSACTION_V2'", policy["condition"])
             self.assertEqual(policy["condition"].count("("), policy["condition"].count(")"))
             self.assertNotIn('"', policy["condition"])

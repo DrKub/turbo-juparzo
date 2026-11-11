@@ -1,7 +1,7 @@
 {
   "_comment": [
-    "Turnkey policy set for the turbo-juparzo API user. NOT uploaded anywhere. Placeholders in <...> must be filled at setup:",
-    "<API_USER_ID> = the NON-ROOT Turnkey user that owns the P-256 API key on disk (still unknown). Organization id is set via env TURNKEY_ORG_ID (still unknown). Signer filled 2026-11-09: 9Ao3ggbuUaiWPzYKr4VdsNQ9LMzM6MPmraZRVv4gv1UW (profile turnkey in config/wallet.json);",
+    "Turnkey policy set for the turbo-juparzo API user. NOT uploaded anywhere. All placeholders filled; still NOT uploaded:",
+    "API user filled 2026-11-11: 021e6666-6d79-4ef4-9e8e-eca37248d92b (turbo-juparzo-bot, intended NON-ROOT; root status not yet verified). Organization a1f37a84-6335-49fe-8f4e-cbcd9e12ea37 (also via env TURNKEY_ORG_ID). Read-only list_wallets with this user's key succeeded 2026-11-11 (wallet Turbo Jupiter 752058aa-5b7f-56fd-9bab-71e022b81b25). Signer filled 2026-11-09: 9Ao3ggbuUaiWPzYKr4VdsNQ9LMzM6MPmraZRVv4gv1UW (profile turnkey in config/wallet.json);",
     "WSOL ATA 2cvHExWS1E1EPgTrNnfxo3eAtFepfZ8cBZW2xamSoYPM and USDC ATA 3hQu4N3TECymZCPeZeq7X1vMkic8APDJvjnpUouAaFqZ derived offline with metis_offline.pda (Token program).",
     "Evaluation (docs.turnkey.com/concepts/policies/overview): root quorum bypasses all policies; any matching DENY wins; else any matching ALLOW; else implicit DENY.",
     "A policy whose condition hits an evaluation error is SKIPPED: an erroring ALLOW allows nothing, an erroring DENY denies nothing (docs.turnkey.com/concepts/policies/language#evaluation-errors-and-short-circuiting). The ALLOW policies below are therefore the real protection; the DENY policies are a belt only.",
@@ -14,14 +14,14 @@
       "policyName": "turbo-juparzo: allow bounded Jupiter SOL->USDC swap",
       "notes": "One System transfer <= 1000000 lamports into the signer's WSOL ATA; only ComputeBudget/System/Token/ATA/Jupiter programs; exactly one Jupiter route_v2 instruction whose authority/source/destination are the signer, its WSOL ATA and its USDC ATA; no SPL transfers.",
       "effect": "EFFECT_ALLOW",
-      "consensus": "approvers.any(user, user.id == '<API_USER_ID>')",
+      "consensus": "approvers.any(user, user.id == '021e6666-6d79-4ef4-9e8e-eca37248d92b')",
       "condition": "activity.type == 'ACTIVITY_TYPE_SIGN_TRANSACTION_V2' && wallet_account.address == '9Ao3ggbuUaiWPzYKr4VdsNQ9LMzM6MPmraZRVv4gv1UW' && solana.tx.version == 'V0' && solana.tx.program_keys.all(p, p in ['ComputeBudget111111111111111111111111111111', '11111111111111111111111111111111', 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL', 'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4']) && solana.tx.instructions.count() <= 8 && solana.tx.spl_transfers.count() == 0 && solana.tx.transfers.count() == 1 && solana.tx.transfers.all(t, t.from == '9Ao3ggbuUaiWPzYKr4VdsNQ9LMzM6MPmraZRVv4gv1UW' && t.to == '2cvHExWS1E1EPgTrNnfxo3eAtFepfZ8cBZW2xamSoYPM' && t.amount > 0 && t.amount <= 1000000) && solana.tx.instructions.filter(i, i.program_key == 'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4').count() == 1 && solana.tx.instructions.filter(i, i.program_key == 'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4').all(i, i.instruction_data_hex[0..16] == 'bb64facc31c4af14' && i.accounts[0].account_key == '9Ao3ggbuUaiWPzYKr4VdsNQ9LMzM6MPmraZRVv4gv1UW' && i.accounts[1].account_key == '2cvHExWS1E1EPgTrNnfxo3eAtFepfZ8cBZW2xamSoYPM' && i.accounts[2].account_key == '3hQu4N3TECymZCPeZeq7X1vMkic8APDJvjnpUouAaFqZ')"
     },
     {
       "policyName": "turbo-juparzo: allow SOL withdrawal only to 3YxV",
       "notes": "Plain System transfer(s) from the signer to the owner's address 3YxVKCTSZUvQGFPL51dzXPoFj82k4v4NJC6cSxDuyqwx only; no lookup tables; no other programs except ComputeBudget. SPL withdrawals are not allowed by this set.",
       "effect": "EFFECT_ALLOW",
-      "consensus": "approvers.any(user, user.id == '<API_USER_ID>')",
+      "consensus": "approvers.any(user, user.id == '021e6666-6d79-4ef4-9e8e-eca37248d92b')",
       "condition": "activity.type == 'ACTIVITY_TYPE_SIGN_TRANSACTION_V2' && wallet_account.address == '9Ao3ggbuUaiWPzYKr4VdsNQ9LMzM6MPmraZRVv4gv1UW' && (solana.tx.version == 'LEGACY' || solana.tx.version == 'V0') && solana.tx.address_table_lookups.count() == 0 && solana.tx.program_keys.all(p, p in ['11111111111111111111111111111111', 'ComputeBudget111111111111111111111111111111']) && solana.tx.spl_transfers.count() == 0 && solana.tx.transfers.count() >= 1 && solana.tx.transfers.all(t, t.from == '9Ao3ggbuUaiWPzYKr4VdsNQ9LMzM6MPmraZRVv4gv1UW' && t.to == '3YxVKCTSZUvQGFPL51dzXPoFj82k4v4NJC6cSxDuyqwx')"
     },
     {
