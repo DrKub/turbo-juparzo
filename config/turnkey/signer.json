@@ -8,5 +8,5 @@
   "daily_max_lamports": 5000000,
   "request_timeout_s": 10,
   "organization_id": "a1f37a84-6335-49fe-8f4e-cbcd9e12ea37",
-  "api_key_path": "/home/box/.config/turnkey/api_private.pem"
+  "api_key_path": "/home/box/.config/turnkey/api_private_chef.pem"
 }

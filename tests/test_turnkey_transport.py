@@ -268,7 +268,7 @@ class KeyAndCliTest(Env):
     def test_repo_config_default_key_path_and_disabled_state(self):
         cfg = ts.load_config(ts.CONFIG_PATH)
         self.assertEqual((cfg["enabled"], cfg["broadcast"], cfg["transport"]), (False, False, "https"))
-        self.assertEqual(cfg["api_key_path"], "/home/box/.config/turnkey/api_private.pem")
+        self.assertEqual(cfg["api_key_path"], "/home/box/.config/turnkey/api_private_chef.pem")
         self.assertEqual(cfg["organization_id"], "a1f37a84-6335-49fe-8f4e-cbcd9e12ea37")
         with self.assertRaisesRegex(ts.ConfigError, "signer_disabled"):
             ts.TurnkeySigner.from_environment(ts.CONFIG_PATH, env={})
