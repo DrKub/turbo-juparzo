@@ -1,7 +1,6 @@
 # Turnkey server-side signer (`tools/turnkey_signer.py`) — design and limits
 
-Status: code + policies only. No Turnkey account, no API key, no request ever sent,
-nothing signed or broadcast. `config/turnkey/signer.json` has `"enabled": false`.
+Status 2026-11-11: policies are live in the Turnkey dashboard; the owner's test run (turnkey_sign_test.py) signed the allowed Jupiter swap and got HTTP 403 code 7 PolicyEnginePermissionError / OUTCOME_DENY_EXPLICIT for a transfer to a foreign address. The HTTPS transport, key loading, local policy mirror and a separate broadcast gate are implemented (see "Commands" at the end). `config/turnkey/signer.json` stays `"enabled": false`, `"broadcast": false`.
 
 ## What the docs say (fetched 2026-11-09)
 
@@ -39,3 +38,13 @@ The API key is a P-256 private key in env on this box. Whoever reads it can subm
 3. Done 2026-11-09: wallet is configurable (`config/wallet.json`, `tools/wallet.py`; `--wallet` or env `TURBO_WALLET`; default `phantom` = 8Xm6). Profile `turnkey` = 9Ao3ggbuUaiWPzYKr4VdsNQ9LMzM6MPmraZRVv4gv1UW, WSOL ATA 2cvHExWS1E1EPgTrNnfxo3eAtFepfZ8cBZW2xamSoYPM, USDC ATA 3hQu4N3TECymZCPeZeq7X1vMkic8APDJvjnpUouAaFqZ. The signer requires a `turnkey` handoff and fee payer 9Ao3. Unsigned dry run with `--wallet turnkey`: build + metis-offline ok_unsigned; simulation `AccountNotFound` because 9Ao3 is unfunded (expected); gate denied `simulation_error`.
 4. Fund a small float; set env; flip `enabled`; choose transport `https`.
 5. Broadcast remains unimplemented; a separate, explicitly approved step would add it.
+
+## Commands (2026-11-11)
+Key: PEM at `api_key_path` (default `/home/box/.config/turnkey/api_private.pem`) or env `TURNKEY_API_KEY_PATH`; the private key is never printed or logged. The box key's public part must first be added in the Turnkey dashboard as an API key of the non-root user `turbo-juparzo-bot` (021e6666-...).
+
+1. `python3 tools/turnkey_cli.py pubkey` prints the compressed public key hex (offline).
+2. `python3 tools/turnkey_cli.py check` one read-only `list_wallets` call. 401 "could not find public key" = key not registered yet.
+3. `python3 tools/turnkey_cli.py sign [--out DIR]` (needs `"enabled": true`): build -> metis-offline -> simulation -> sign gate (needs a funded wallet) -> local policy mirror -> ONE sign request. Writes `DIR/turnkey-signed.hex` (0600). Never sends.
+4. `python3 tools/turnkey_cli.py broadcast --signed DIR/turnkey-signed.hex --ticket data/sign-gate/tickets/<id>.json --broadcast-confirm` needs `"broadcast": true` in signer.json AND the flag; one send per ticket, no retry, read-only freshness check first.
+
+Stop reasons added: `turnkey_policy_denied` (HTTP 403 code 7 / PolicyEnginePermissionError / REJECTED; carries policy_id and outcome), `turnkey_malformed_response`, `local_policy_mismatch` (tools/turnkey_policy_mirror.py disagrees with policy 1 before any request). The daily reservation is kept after a denial.

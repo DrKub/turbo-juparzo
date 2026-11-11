@@ -3,12 +3,12 @@
 This is the single module in tools/ that can obtain a signature. It sends ONE
 stamped ACTIVITY_TYPE_SIGN_TRANSACTION_V2 request to Turnkey through an
 INJECTED transport, verifies the returned signed transaction, logs a `sign`
-entry and stops. Broadcasting is not implemented (config "broadcast": true is
-refused), so a signed transaction is left unsent until its blockhash expires.
+entry and stops. This module has no send path; a signed transaction is left unsent
+(until tools/turnkey_broadcast.py is run with both gates) or until its blockhash expires.
 
 Preconditions, all fail closed (bridge stop rule; network loss -> KILL):
  1. kill switch file absent;
- 2. config/turnkey/signer.json "enabled": true, "broadcast": false, caps valid;
+ 2. config/turnkey/signer.json "enabled": true, caps valid ("broadcast" must be a boolean but is ignored here);
  3. env TURNKEY_API_PUBLIC_KEY / TURNKEY_API_PRIVATE_KEY / TURNKEY_ORG_ID / TURNKEY_SIGN_WITH;
  4. the ticket is the one the sign gate wrote to data/sign-gate/consumed/<message_sha256>
     (O_EXCL marker) and matches the handoff; now < expires_at_epoch (20 s TTL);
@@ -22,7 +22,16 @@ Preconditions, all fail closed (bridge stop rule; network loss -> KILL):
     before the request and never refunded;
  9. Turnkey answers HTTP 200 with ACTIVITY_STATUS_COMPLETED (no polling, no retry);
 10. the signed transaction carries the identical message and a valid ed25519
-    signature by the fee payer.
+    signature by the fee payer;
+11. before the request, the local policy mirror (tools/turnkey_policy_mirror.py) must say Turnkey's
+    swap policy would match this exact transaction (local_policy_mismatch otherwise).
+
+Key source: env TURNKEY_API_PUBLIC_KEY + TURNKEY_API_PRIVATE_KEY (hex), or a PKCS8 PEM file
+(env TURNKEY_API_KEY_PATH, else config "api_key_path"); the private key is never printed or logged.
+Org id: env TURNKEY_ORG_ID else config "organization_id". Signer address: env TURNKEY_SIGN_WITH else the
+wallet profile "turnkey". A policy denial (HTTP 403, code 7 / PolicyEnginePermissionError) is the stop
+reason `turnkey_policy_denied` (no retry, fail closed). Config "broadcast" is NOT read here: this module
+never broadcasts; tools/turnkey_broadcast.py is the only sender and needs it true plus --broadcast-confirm.
 
 Stamping (docs.turnkey.com/developer-reference/api-overview/stamps): ECDSA P-256
 SHA-256 over the exact JSON body, DER, hex; X-Stamp = base64url(JSON
@@ -50,7 +59,7 @@ sys.path.insert(0, str(ROOT))
 from metis_offline.base58 import b58encode, pubkey  # noqa: E402
 from metis_offline.preflight import JUPITER, MAX_AMOUNT_LAMPORTS, ROUTE_V2, SYSTEM  # noqa: E402
 from metis_offline.wire import WireError, parse_transaction  # noqa: E402
-from tools import oplog, sign_gate, wallet  # noqa: E402
+from tools import oplog, sign_gate, turnkey_policy_mirror as mirror, wallet  # noqa: E402
 from tools.bridge import STATE_DIR as BRIDGE_STATE_DIR, Stop  # noqa: E402
 
 CONFIG_PATH = ROOT / "config" / "turnkey" / "signer.json"
@@ -59,6 +68,10 @@ SIGN_PATH = "/public/v1/submit/sign_transaction"
 ACTIVITY_TYPE = "ACTIVITY_TYPE_SIGN_TRANSACTION_V2"
 SCHEME = "SIGNATURE_SCHEME_TK_API_P256"
 ENV_KEYS = ("TURNKEY_API_PUBLIC_KEY", "TURNKEY_API_PRIVATE_KEY", "TURNKEY_ORG_ID", "TURNKEY_SIGN_WITH")
+USER_AGENT = "turnkey-check/1.0"  # Turnkey's Cloudflare front end answers error 1010 to the default Python-urllib agent
+DEFAULT_ORG_ID = ""  # taken from config/turnkey/signer.json "organization_id" or env TURNKEY_ORG_ID
+UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+OUTCOME_RE = re.compile(r"OUTCOME_[A-Z_]+")
 NETWORK_ERRORS = (urllib.error.URLError, TimeoutError, socket.timeout, ConnectionError)
 
 
@@ -75,8 +88,8 @@ def load_config(path: Path = CONFIG_PATH) -> dict:
         cfg = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         raise ConfigError("config_unreadable")
-    if cfg.get("broadcast") is not False:
-        raise ConfigError("broadcast_not_implemented")
+    if type(cfg.get("broadcast")) is not bool:
+        raise ConfigError("bad_broadcast_flag")
     for key in ("per_trade_max_lamports", "daily_max_lamports"):
         if type(cfg.get(key)) is not int or cfg[key] <= 0:
             raise ConfigError(f"bad_{key}")
@@ -85,6 +98,25 @@ def load_config(path: Path = CONFIG_PATH) -> dict:
     if cfg["daily_max_lamports"] < cfg["per_trade_max_lamports"]:
         raise ConfigError("daily_below_per_trade")
     return cfg
+
+
+def load_api_key_pem(path) -> tuple[str, str]:
+    """(compressed public key hex, private scalar hex) from a PKCS8/SEC1 PEM P-256 key. Never prints either."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    try:
+        key = serialization.load_pem_private_key(Path(path).read_bytes(), password=None)
+    except (OSError, ValueError, TypeError):
+        raise ConfigError("api_key_unreadable")
+    if not isinstance(key, ec.EllipticCurvePrivateKey) or not isinstance(key.curve, ec.SECP256R1):
+        raise ConfigError("api_key_not_p256")
+    public = key.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.CompressedPoint).hex()
+    return public, format(key.private_numbers().private_value, "064x")
+
+
+def public_key_hex(path) -> str:
+    return load_api_key_pem(path)[0]
 
 
 class Credentials:
@@ -107,6 +139,23 @@ class Credentials:
         if missing:
             raise ConfigError("missing_env:" + ",".join(missing))
         return cls(*(env[k] for k in ENV_KEYS))
+
+    @classmethod
+    def resolve(cls, config: dict, env=os.environ, wallet_path: Path = wallet.CONFIG_PATH) -> "Credentials":
+        """Hex keys from env, else the PEM file (env TURNKEY_API_KEY_PATH / config api_key_path).
+        Org: env TURNKEY_ORG_ID / config organization_id. Signer: env TURNKEY_SIGN_WITH / wallet profile turnkey."""
+        org = env.get("TURNKEY_ORG_ID") or config.get("organization_id")
+        sign_with = env.get("TURNKEY_SIGN_WITH") or wallet.load_profile("turnkey", path=wallet_path).address
+        if env.get("TURNKEY_API_PUBLIC_KEY") or env.get("TURNKEY_API_PRIVATE_KEY"):
+            missing = [k for k in ("TURNKEY_API_PUBLIC_KEY", "TURNKEY_API_PRIVATE_KEY") if not env.get(k)]
+            if missing or not org:
+                raise ConfigError("missing_env:" + ",".join(missing + ([] if org else ["TURNKEY_ORG_ID"])))
+            return cls(env["TURNKEY_API_PUBLIC_KEY"], env["TURNKEY_API_PRIVATE_KEY"], org, sign_with)
+        key_path = env.get("TURNKEY_API_KEY_PATH") or config.get("api_key_path")
+        if not key_path or not org:
+            raise ConfigError("missing_env:" + ",".join((["TURNKEY_API_KEY_PATH"] if not key_path else []) + (["TURNKEY_ORG_ID"] if not org else [])))
+        public, private = load_api_key_pem(os.path.expanduser(key_path))
+        return cls(public, private, org, sign_with)
 
     def __repr__(self) -> str:  # never show the private key
         return f"Credentials(public={self.api_public_key[:10]}..., org={self.organization_id}, sign_with={self.sign_with})"
@@ -157,19 +206,35 @@ def sign_request_body(creds: Credentials, unsigned_raw: bytes, timestamp_ms: int
 
 
 def urllib_transport(url: str, body: str, headers: dict, timeout: float) -> tuple[int, dict]:
-    """Real HTTPS transport. Never used by tests; only wired when config transport == "https" and enabled."""
+    """Real HTTPS transport (config transport == "https" and enabled). Returns (HTTP status, JSON object);
+    a non-JSON or non-object body (e.g. a Cloudflare page) comes back as {"_unparsed": first 200 chars}."""
     import urllib.request
 
-    req = urllib.request.Request(url, data=body.encode("utf-8"), headers=headers, method="POST")
+    req = urllib.request.Request(url, data=body.encode("utf-8"), headers={"User-Agent": USER_AGENT, **headers}, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.status, json.loads(resp.read().decode() or "{}")
+            status, text = resp.status, resp.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as exc:
-        try:
-            payload = json.loads(exc.read().decode() or "{}")
-        except ValueError:
-            payload = {}
-        return exc.code, payload
+        status, text = exc.code, exc.read().decode("utf-8", "replace")
+    try:
+        payload = json.loads(text or "{}")
+    except ValueError:
+        payload = None
+    return status, payload if isinstance(payload, dict) else {"_unparsed": text[:200]}
+
+
+def is_policy_denial(status: int, payload) -> bool:
+    """Turnkey's policy engine refusal: HTTP 403, gRPC code 7 (PermissionDenied), PolicyEnginePermissionError."""
+    if status != 403 or not isinstance(payload, dict):
+        return False
+    return payload.get("code") == 7 or "PolicyEnginePermissionError" in json.dumps(payload, default=str)
+
+
+def denial_facts(payload: dict) -> dict:
+    text = json.dumps(payload, default=str)
+    policy = UUID_RE.search(text)
+    outcome = OUTCOME_RE.search(text)
+    return {"policy_id": policy.group(0) if policy else None, "outcome": outcome.group(0) if outcome else None}
 
 
 def tx_spend_lamports(tx, payer: bytes) -> int:
@@ -213,7 +278,7 @@ class TurnkeySigner:
         cfg = load_config(config_path)
         if cfg.get("enabled") is not True:
             raise ConfigError("signer_disabled")
-        creds = Credentials.from_env(env)
+        creds = Credentials.resolve(cfg, env, kwargs.get("wallet_path", wallet.CONFIG_PATH))
         transport = kwargs.pop("transport", None)
         if transport is None:
             if cfg.get("transport") != "https":
@@ -274,8 +339,6 @@ class TurnkeySigner:
             raise Stop("kill_switch", halt=True)
         if self.config.get("enabled") is not True:
             raise Stop("signer_disabled")
-        if self.config.get("broadcast") is not False:
-            raise Stop("broadcast_not_implemented")
         if handoff.get("wallet_profile") != "turnkey" or handoff.get("signer") != self.profile.address:
             raise Stop("wallet_profile_not_turnkey", wallet_profile=handoff.get("wallet_profile"))
         ticket = self._ticket(handoff)
@@ -302,6 +365,9 @@ class TurnkeySigner:
         spend = tx_spend_lamports(tx, payer)
         if spend <= 0 or spend > self.config["per_trade_max_lamports"]:
             raise Stop("per_trade_cap", spend_lamports=spend, per_trade_max=self.config["per_trade_max_lamports"], message_sha256=sha)
+        mismatches = mirror.swap_failures(tx, self.profile.address, self.profile.wsol_ata, self.profile.usdc_ata)
+        if mismatches:
+            raise Stop("local_policy_mismatch", message_sha256=sha, mismatches=mismatches)
         spent_today = self._reserve_daily(spend)
         now_ms = int(self.clock() * 1000)
         body = sign_request_body(self.creds, raw, now_ms)
@@ -312,7 +378,7 @@ class TurnkeySigner:
         if self.clock() >= ticket["expires_at_epoch"]:
             raise Stop("ticket_expired", message_sha256=sha)
         url = self.config.get("api_base", "https://api.turnkey.com").rstrip("/") + SIGN_PATH
-        headers = {"Content-Type": "application/json", "X-Stamp": stamp}
+        headers = {"Content-Type": "application/json", "X-Stamp": stamp, "User-Agent": USER_AGENT}
         oplog.append("note", {"component": "turnkey_signer", "event": "request", "ticket_id": ticket["ticket_id"], "spend_lamports": spend,
                               "spent_today_lamports": spent_today, "sign_with": self.creds.sign_with, "timestamp_ms": str(now_ms)}, sha, path=self.log_path)
         try:
@@ -321,17 +387,23 @@ class TurnkeySigner:
             raise Stop("turnkey_network_loss", halt=True, error_type=type(exc).__name__, message_sha256=sha)
         except Exception as exc:  # noqa: BLE001
             raise Stop("turnkey_transport_exception", halt=True, error_type=type(exc).__name__, message_sha256=sha)
+        if is_policy_denial(status, payload):
+            raise Stop("turnkey_policy_denied", message_sha256=sha, http_status=status, **denial_facts(payload))
         if status != 200:
             halt = status == 429 or status >= 500
             raise Stop(f"turnkey_http_{status}", halt=halt, message_sha256=sha, turnkey_message=str((payload or {}).get("message", ""))[:200])
-        activity = (payload or {}).get("activity") or {}
+        activity = payload.get("activity") if isinstance(payload, dict) else None
+        if not isinstance(activity, dict) or not isinstance(activity.get("status"), str):
+            raise Stop("turnkey_malformed_response", message_sha256=sha)
+        if activity.get("status") == "ACTIVITY_STATUS_REJECTED":
+            raise Stop("turnkey_policy_denied", message_sha256=sha, activity_id=activity.get("id"), outcome="ACTIVITY_STATUS_REJECTED")
         if activity.get("status") != "ACTIVITY_STATUS_COMPLETED":
             raise Stop(f"turnkey_status:{activity.get('status')}", message_sha256=sha, activity_id=activity.get("id"),
                        failure=str(activity.get("failure") or "")[:200])
         signed_hex = (((activity.get("result") or {}).get("signTransactionResult") or {}).get("signedTransaction"))
         try:
             signed = parse_transaction(bytes.fromhex(signed_hex))
-        except (TypeError, ValueError, WireError):
+        except (TypeError, ValueError, WireError, IndexError):
             raise Stop("signed_unparseable", message_sha256=sha, activity_id=activity.get("id"))
         if hashlib.sha256(signed.message).hexdigest() != sha:
             raise Stop("signed_message_mismatch", message_sha256=sha, activity_id=activity.get("id"))

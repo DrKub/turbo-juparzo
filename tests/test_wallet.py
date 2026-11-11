@@ -71,7 +71,7 @@ class WalletProfileTest(unittest.TestCase):
         self.assertIn("021e6666-6d79-4ef4-9e8e-eca37248d92b", text)
         self.assertNotIn(PHANTOM, text)
         cfg = json.loads((wallet.ROOT / "config" / "turnkey" / "signer.json").read_text())
-        self.assertEqual((cfg["enabled"], cfg["transport"], cfg["broadcast"]), (False, "none", False))
+        self.assertEqual((cfg["enabled"], cfg["transport"], cfg["broadcast"]), (False, "https", False))
 
 
 if __name__ == "__main__":

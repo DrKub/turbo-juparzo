@@ -1,10 +1,12 @@
 {
-  "_comment": "Local Turnkey signer settings. DISABLED by default. Credentials come only from env: TURNKEY_API_PUBLIC_KEY, TURNKEY_API_PRIVATE_KEY, TURNKEY_ORG_ID, TURNKEY_SIGN_WITH. per_trade and daily caps are enforced LOCALLY by tools/turnkey_signer.py; Turnkey policies (policies.json) enforce the per-transaction cap and program/destination allowlists server-side; Turnkey has no native daily/cumulative limit for signing.",
+  "_comment": "Local Turnkey signer settings. DISABLED by default. Org id and key path here are not secrets (the key FILE is never in the repo). Credentials: env TURNKEY_API_PUBLIC_KEY/TURNKEY_API_PRIVATE_KEY (hex) or the PEM at api_key_path / env TURNKEY_API_KEY_PATH; env TURNKEY_ORG_ID overrides organization_id. per_trade and daily caps are enforced LOCALLY by tools/turnkey_signer.py; Turnkey policies (policies.json) enforce the per-transaction cap and program/destination allowlists server-side; Turnkey has no native daily/cumulative limit for signing. tools/turnkey_signer.py never reads `broadcast`; tools/turnkey_broadcast.py needs broadcast true AND --broadcast-confirm.",
   "enabled": false,
   "api_base": "https://api.turnkey.com",
-  "transport": "none",
+  "transport": "https",
   "broadcast": false,
   "per_trade_max_lamports": 1000000,
   "daily_max_lamports": 5000000,
-  "request_timeout_s": 10
+  "request_timeout_s": 10,
+  "organization_id": "a1f37a84-6335-49fe-8f4e-cbcd9e12ea37",
+  "api_key_path": "/home/box/.config/turnkey/api_private.pem"
 }

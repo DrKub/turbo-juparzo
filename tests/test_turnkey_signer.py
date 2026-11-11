@@ -45,7 +45,8 @@ def creds(sign_with=None):
 
 
 def case_for(payer: bytes, lamports: int = fx.AMOUNT) -> fx.Case:
-    case = fx.Case(static=[payer] + list(fx.STATIC[1:]))
+    atas = [associated_token_address(payer, mint, TOKEN, ATA) for mint in (WSOL, USDC)]
+    case = fx.Case(static=[payer] + atas + list(fx.STATIC[3:]))
     if lamports != fx.AMOUNT:
         case.instructions = [ix if not (ix.program_index == fx.I_SYSTEM) else fx.transfer_ix(lamports) for ix in case.instructions]
     return case
@@ -216,7 +217,7 @@ class SignerTest(unittest.TestCase):
 
     def test_config_and_env_loading_fail_closed(self):
         path = self.dir / "c.json"
-        for cfg, err in ((config(broadcast=True), "broadcast_not_implemented"), (config(per_trade_max_lamports=2_000_000), "per_trade_above_preflight_cap"),
+        for cfg, err in ((config(broadcast="yes"), "bad_broadcast_flag"), (config(per_trade_max_lamports=2_000_000), "per_trade_above_preflight_cap"),
                          (config(daily_max_lamports=10), "daily_below_per_trade")):
             path.write_text(json.dumps(cfg))
             with self.assertRaisesRegex(ts.ConfigError, err):

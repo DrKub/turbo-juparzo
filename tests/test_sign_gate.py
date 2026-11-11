@@ -251,12 +251,20 @@ class ReadOnlyRpcTest(unittest.TestCase):
                 readonly_rpc.rpc(method, [])
 
     def test_tools_never_sign_or_send(self):
-        """No tool signs or sends, with ONE named exception: tools/turnkey_signer.py may request a
-        Turnkey signature (disabled by default) but must never broadcast."""
+        """No tool signs or sends, with TWO named exceptions: tools/turnkey_signer.py may request a
+        Turnkey signature (disabled by default) but must never broadcast; tools/turnkey_broadcast.py is
+        the only file that may name sendTransaction (needs config broadcast true AND --broadcast-confirm),
+        and only turnkey_cli.py may import it."""
         root = Path(__file__).resolve().parents[1] / "tools"
         signer_exception = "turnkey_signer.py"
+        broadcast_exception = "turnkey_broadcast.py"
         for path in root.glob("*.py"):
             text = path.read_text(encoding="utf-8")
+            if path.name not in (broadcast_exception, "turnkey_cli.py"):
+                self.assertNotIn("turnkey_broadcast", text.replace("tools/turnkey_broadcast.py", ""), str(path))
+            if path.name == broadcast_exception:
+                self.assertEqual(text.count('"method": "sendTransaction"'), 1)
+                continue
             needles = ["solana_send", "Keypair", "sign_message", "/execute"]
             if path.name != signer_exception:
                 needles.append("signTransaction")
